@@ -11,7 +11,7 @@ async function bootstrap() {
 
   // ── CORS ──────────────────────────────────────
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Autoriser les requêtes sans origine (ex: Postman), localhost, et Vercel
       if (!origin || origin.includes('localhost') || origin.includes('vercel.app') || origin === process.env.ADMIN_URL) {
         callback(null, true);
