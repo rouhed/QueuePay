@@ -11,14 +11,14 @@ async function bootstrap() {
 
   // ── CORS ──────────────────────────────────────
   app.enableCors({
-    origin: [
-      process.env.ADMIN_URL || 'http://localhost:3000',
-      process.env.CLIENT_URL || 'http://localhost:3002',
-      process.env.AGENT_URL || 'http://localhost:3003',
-      'http://localhost:3000',
-      'http://localhost:3002',
-      'http://localhost:3003',
-    ],
+    origin: (origin, callback) => {
+      // Autoriser les requêtes sans origine (ex: Postman), localhost, et Vercel
+      if (!origin || origin.includes('localhost') || origin.includes('vercel.app') || origin === process.env.ADMIN_URL) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   });
 
