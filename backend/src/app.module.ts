@@ -23,17 +23,29 @@ import { WebSocketModule } from './modules/websocket/websocket.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('database.host'),
-        port: config.get<number>('database.port'),
-        username: config.get<string>('database.username'),
-        password: config.get<string>('database.password'),
-        database: config.get<string>('database.name'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: config.get<string>('app.nodeEnv') === 'development',
-        logging: config.get<string>('app.nodeEnv') === 'development',
-      }),
+      useFactory: (config: ConfigService) => {
+        const isDev = config.get<string>('app.nodeEnv') === 'development';
+        const dbUrl = config.get<string>('database.url');
+
+        return {
+          type: 'postgres',
+          ...(dbUrl
+            ? {
+                url: dbUrl,
+                ssl: { rejectUnauthorized: false }, // Requis par Neon/Render
+              }
+            : {
+                host: config.get<string>('database.host'),
+                port: config.get<number>('database.port'),
+                username: config.get<string>('database.username'),
+                password: config.get<string>('database.password'),
+                database: config.get<string>('database.name'),
+              }),
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: isDev,
+          logging: isDev,
+        };
+      },
     }),
 
     // ── Modules métier ────────────────────────────

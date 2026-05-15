@@ -7,6 +7,7 @@ export default () => ({
     adminUrl: process.env.ADMIN_URL || 'http://localhost:3000',
   },
   database: {
+    url: process.env.DATABASE_URL,
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432', 10),
     username: process.env.DB_USER || 'queuepay',
