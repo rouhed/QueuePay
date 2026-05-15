@@ -1,0 +1,759 @@
+================================================================================
+        CAHIER DES CHARGES COMPLET — VERSION 1.1
+        Système de Gestion de File d'Attente et de Réservation Client en Ligne
+        Avec paiement intégré MVola & Orange Money
+================================================================================
+
+  Projet      : QueuePay — Plateforme de gestion de file d'attente
+  Version     : 1.1 (mise à jour validation ticket au guichet)
+  Date        : Année 2026
+  Statut      : En cours de validation
+  Destinataires : Équipe technique
+
+--------------------------------------------------------------------------------
+RÉSUMÉ EXÉCUTIF
+--------------------------------------------------------------------------------
+
+Ce document constitue le cahier des charges technique et fonctionnel complet
+pour le développement de la plateforme QueuePay. La solution intègre un système
+de paiement mobile natif (MVola et Orange Money) permettant aux clients de
+Madagascar d'acheter et déposer des fonds pour acquérir leurs tickets d'accès
+à des services. Le projet couvre l'ensemble des modules : portail client,
+back-office administrateur, API de paiement, notifications, rapports et
+maintenance.
+
+================================================================================
+SECTION 0 — COMPRENDRE CE PROJET : VISION GLOBALE ET MODE D'EMPLOI
+================================================================================
+
+  Cette section a été ajoutée pour aider toute personne (développeur, investisseur,
+  nouveau membre de l'équipe) à comprendre rapidement QueuePay avant de plonger
+  dans les détails techniques.
+
+--------------------------------------------------------------------------------
+0.1 Le problème qu'on résout
+--------------------------------------------------------------------------------
+
+À Madagascar, dans les administrations, banques, hôpitaux ou commerces, les gens
+font la queue physiquement pendant des heures. Ils doivent se déplacer juste
+pour "prendre leur numéro", attendre sans savoir combien de temps ça va durer,
+et parfois repartir sans être servis.
+
+QueuePay résout ce problème : le client réserve sa place depuis son téléphone,
+paie son ticket avec MVola ou Orange Money, et reçoit des alertes en temps réel
+quand son tour approche. Il n'a plus besoin d'être physiquement présent avant
+son moment.
+
+--------------------------------------------------------------------------------
+0.2 Comment fonctionne QueuePay — le scénario concret pas à pas
+--------------------------------------------------------------------------------
+
+  SCÉNARIO TYPE : Un citoyen doit aller à la mairie pour un document officiel.
+
+  AVANT QueuePay (problème actuel) :
+    - Il se lève tôt, prend le taxi, arrive à 7h00
+    - Il prend un ticket numéro 47
+    - Il attend 3 heures en salle sans savoir quand il sera appelé
+    - Parfois la file ferme avant son tour → il revient le lendemain
+
+  AVEC QueuePay (la solution) :
+
+  ÉTAPE 1 — Le client cherche le service depuis son téléphone
+    → Il ouvre l'app QueuePay sur son téléphone
+    → Il tape "Mairie" ou "Document officiel" dans la barre de recherche
+    → Il voit la mairie de sa ville, le temps d'attente actuel (ex: "2h30"),
+       le tarif du ticket (ex: 500 Ar), et les horaires
+
+  ÉTAPE 2 — Il achète son ticket
+    → Il appuie sur "Prendre un ticket"
+    → Il choisit le paiement via MVola ou Orange Money
+    → Il confirme avec son code PIN sur son téléphone
+    → En 10 secondes : son ticket est acheté et apparaît sur son écran
+    → Il reçoit aussi le ticket par SMS avec un QR Code
+
+  ÉTAPE 3 — Il suit sa position depuis chez lui
+    → L'app lui affiche : "Vous êtes le 12ème dans la file"
+    → Le temps d'attente estimé se met à jour toutes les 30 secondes
+    → 30 minutes avant son tour : il reçoit une alerte push + SMS
+    → Quand il reste 3 personnes avant lui : alerte "Préparez-vous !"
+    → Quand c'est son tour : alerte "Présentez-vous au guichet 3"
+
+  ÉTAPE 4 — Il se présente au guichet
+    → Le client arrive au guichet et donne son numéro de ticket verbalement
+      (ex : "J'ai le ticket N°047") OU montre son téléphone / ticket papier
+    → L'agent recherche ce numéro dans son interface et voit immédiatement :
+        - Le nom du client
+        - Le service demandé
+        - L'heure de réservation
+        - Le statut du paiement (payé / non payé)
+        - L'historique du client si besoin
+    → L'agent valide le ticket → le service est rendu
+
+    NOTE : Le QR Code est un raccourci optionnel (scan automatique), mais
+    taper le numéro manuellement donne exactement le même résultat.
+    Les 3 modes de validation sont tous supportés :
+      MODE 1 (rapide)   → Agent scanne le QR Code avec la caméra de sa
+                          tablette — 2 secondes, tout est automatique
+      MODE 2 (standard) → Client dit son numéro, agent le tape dans
+                          l'interface — voit toutes les infos du ticket
+      MODE 3 (secours)  → Client a imprimé son ticket PDF, agent scanne
+                          ou tape le numéro — fonctionne pareil
+
+  ÉTAPE 5 — Côté administration (ce que voit le responsable)
+    → Dans son back-office, il voit en temps réel :
+       - Combien de personnes sont dans chaque file
+       - Les revenus du jour (tickets vendus × tarif)
+       - Les performances de chaque agent (tickets traités / heure)
+       - Les statistiques de la semaine / du mois
+
+--------------------------------------------------------------------------------
+0.3 Les 4 logiciels à construire — et qui les utilise
+--------------------------------------------------------------------------------
+
+  QueuePay n'est pas un seul logiciel. C'est un écosystème de 4 applications
+  qui communiquent toutes avec un seul backend central.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  LOGICIEL 1 : Application mobile (Android + iOS)                        │
+  │  Technologie : React Native                                             │
+  │  Utilisateur : Le CLIENT (la personne qui veut prendre un ticket)       │
+  │  Ce qu'il fait :                                                        │
+  │    - Créer un compte, se connecter                                      │
+  │    - Chercher un service (mairie, banque, hôpital...)                   │
+  │    - Acheter un ticket via MVola ou Orange Money                        │
+  │    - Suivre sa position dans la file en temps réel                      │
+  │    - Gérer son portefeuille numérique (wallet)                          │
+  │    - Voir l'historique de ses tickets et paiements                      │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  LOGICIEL 2 : Portail web client (navigateur PC ou mobile)              │
+  │  Technologie : Next.js (React web)                                      │
+  │  Utilisateur : Le CLIENT qui préfère utiliser un navigateur web         │
+  │  Ce qu'il fait :                                                        │
+  │    - Exactement les mêmes fonctions que l'app mobile                    │
+  │    - Accessible depuis Chrome, Firefox, Safari                          │
+  │    - Télécharger son ticket en PDF                                      │
+  │    - Utile pour ceux qui n'ont pas installé l'application               │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  LOGICIEL 3 : Interface agent guichet (tablette ou PC)                  │
+  │  Technologie : Next.js (navigateur)                                     │
+  │  Utilisateur : L'EMPLOYÉ au guichet (agent de service)                 │
+  │  Ce qu'il fait :                                                        │
+  │    - Se connecter à son guichet et sa file assignée                     │
+  │    - Appuyer sur "Appeler le suivant" (ou raccourci clavier)            │
+  │    - Scanner le QR Code du ticket du client                             │
+  │    - Valider : "Service rendu" ou "Client absent"                       │
+  │    - Transférer un client vers un autre guichet                         │
+  │    - Mettre le guichet en pause (déjeuner, incident)                    │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  LOGICIEL 4 : Back-office administrateur (navigateur PC)                │
+  │  Technologie : Next.js (navigateur)                                     │
+  │  Utilisateur : L'ADMIN (responsable de l'entité ou super admin)        │
+  │  Ce qu'il fait :                                                        │
+  │    - Créer et gérer les files d'attente et services                     │
+  │    - Gérer les comptes agents et leurs horaires                         │
+  │    - Suivre les transactions financières (MVola, Orange Money)          │
+  │    - Voir les tableaux de bord et statistiques                          │
+  │    - Exporter les rapports comptables                                   │
+  │    - Configurer les notifications et les APIs de paiement               │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  BACKEND API — Le moteur invisible (commun aux 4 logiciels)             │
+  │  Technologie : Node.js + NestJS                                         │
+  │  Base de données : PostgreSQL (données) + Redis (temps réel)            │
+  │  Temps réel : WebSockets (Socket.io)                                    │
+  │  Ce qu'il fait :                                                        │
+  │    - Reçoit les demandes des 4 applications                             │
+  │    - Gère les files d'attente en mémoire (Redis)                        │
+  │    - Traite les paiements via l'API MVola et Orange Money               │
+  │    - Envoie les notifications SMS, push, email                          │
+  │    - Stocke toutes les données en base PostgreSQL                       │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+0.4 Stack technologique recommandée — résumé
+--------------------------------------------------------------------------------
+
+  Couche                   | Technologie choisie
+  -------------------------+------------------------------------------
+  App mobile               | React Native
+  Site web + Back-office   | Next.js (React)
+  Interface agent guichet  | Next.js (React)
+  Backend / API            | Node.js + NestJS
+  Base de données          | PostgreSQL + Redis
+  Temps réel               | WebSockets (Socket.io)
+  Notifications push       | Firebase Cloud Messaging (FCM)
+  Notifications SMS        | Opérateur SMS local / Africa's Talking
+  Paiement                 | API MVola (Telma) + API Orange Money
+  Hébergement              | VPS cloud (région Afrique)
+
+  Note : React Native, Next.js et NestJS partagent tous le même langage
+  (JavaScript / TypeScript). Cela signifie qu'une petite équipe peut
+  travailler sur l'ensemble du projet sans changer de langage.
+
+  Electron (logiciel desktop PC) n'est PAS utilisé dans ce projet.
+  QueuePay est une solution web + mobile, pas une application de bureau.
+
+--------------------------------------------------------------------------------
+0.5 Ce que le projet NE fait PAS (limites du périmètre V1.0)
+--------------------------------------------------------------------------------
+
+  - Pas d'intégration avec les systèmes existants des administrations
+  - Pas d'application desktop (Electron, etc.)
+  - Pas de prise en charge d'autres opérateurs de paiement (Airtel, etc.)
+  - Pas de chat ou messagerie entre client et agent
+  - Pas de vidéoconférence ou service à distance
+  - Pas d'intégration bancaire directe (seulement mobile money)
+
+================================================================================
+SECTION 1 — PRÉSENTATION GÉNÉRALE DU PROJET
+================================================================================
+
+--------------------------------------------------------------------------------
+1.1 Contexte et Justification
+--------------------------------------------------------------------------------
+
+Madagascar connaît une croissance rapide de l'usage des services numériques et
+des paiements mobiles. Les longues files d'attente dans les administrations,
+banques, hôpitaux et commerces représentent une perte de temps considérable
+pour les citoyens et une inefficacité opérationnelle pour les prestataires.
+
+La plateforme QueuePay vise à digitaliser la gestion des files d'attente en
+permettant aux clients de réserver leur place à distance, de payer leur ticket
+via MVola ou Orange Money, et de recevoir des notifications en temps réel sur
+leur position dans la file.
+
+--------------------------------------------------------------------------------
+1.2 Objectifs du Projet
+--------------------------------------------------------------------------------
+
+  OBJECTIFS PRINCIPAUX :
+    - Permettre aux clients de réserver et acheter un ticket en ligne sans
+      se déplacer
+    - Intégrer les paiements mobiles MVola (Telma) et Orange Money
+      (Orange Madagascar)
+    - Offrir un tableau de bord administrateur complet pour gérer les files
+      et les services
+    - Réduire les temps d'attente physiques de 70% minimum
+    - Permettre le dépôt de crédit préalable sur un portefeuille numérique
+
+  OBJECTIFS SECONDAIRES :
+    - Générer des statistiques et rapports d'utilisation
+    - Proposer une application mobile (Android/iOS) et une version web
+      responsive
+    - Assurer la traçabilité complète des transactions
+
+--------------------------------------------------------------------------------
+1.3 Périmètre du Projet
+--------------------------------------------------------------------------------
+
+  Module                | Inclus
+  ----------------------+-----------------------------------------------
+  Application client    | Web + Mobile (Android/iOS)
+  Paiement              | MVola + Orange Money
+  Administration        | Back-office complet
+  Notifications         | SMS + Push + Email
+  Rapports              | Tableaux de bord + exports
+
+================================================================================
+SECTION 2 — ACTEURS DU SYSTÈME ET RÔLES
+================================================================================
+
+--------------------------------------------------------------------------------
+2.1 Cartographie des Utilisateurs
+--------------------------------------------------------------------------------
+
+La plateforme distingue cinq types d'acteurs ayant des droits et des interfaces
+dédiés :
+
+  ACTEUR 1 : Super Admin
+    Profil      : Équipe technique / DSI
+    Interface   : Back-office (Logiciel 4)
+    Rôle        : Gestion de la plateforme globale, configuration système,
+                  gestion des opérateurs, surveillance technique, sauvegardes
+
+  ACTEUR 2 : Admin Métier
+    Profil      : Responsable d'une entité (mairie, banque, hôpital...)
+    Interface   : Back-office (Logiciel 4)
+    Rôle        : Création et gestion des files, configuration des services,
+                  gestion des agents, consultation des rapports
+
+  ACTEUR 3 : Agent Guichet
+    Profil      : Employé de service
+    Interface   : Interface agent (Logiciel 3)
+    Rôle        : Appel du prochain client, validation du ticket, gestion
+                  des absences, mise en pause du guichet
+
+  ACTEUR 4 : Client Enregistré
+    Profil      : Utilisateur avec compte QueuePay
+    Interface   : App mobile (Logiciel 1) ou web (Logiciel 2)
+    Rôle        : Création de compte, alimentation du portefeuille,
+                  réservation de tickets, suivi en temps réel, historique
+
+  ACTEUR 5 : Client Anonyme
+    Profil      : Utilisateur sans compte
+    Interface   : App mobile (Logiciel 1) ou web (Logiciel 2)
+    Rôle        : Consultation des files, prise de ticket unique avec
+                  paiement direct (sans portefeuille)
+
+================================================================================
+SECTION 3 — SPÉCIFICATIONS FONCTIONNELLES — MODULE CLIENT
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 Authentification et Gestion de Compte
+--------------------------------------------------------------------------------
+
+  INSCRIPTION :
+    - Formulaire : nom, prénom, email, numéro de téléphone, mot de passe
+    - Vérification du numéro de téléphone par OTP SMS
+      (code à 6 chiffres, validité 5 minutes)
+    - Vérification optionnelle de l'email par lien d'activation
+    - Choix de la langue : Anglais / Français / Malagasy
+    - Connexion sociale : Google
+
+  CONNEXION :
+    - Par email/mot de passe ou numéro de téléphone/mot de passe
+    - Option "Se souvenir de moi" (token persistant 30 jours)
+    - Réinitialisation de mot de passe par SMS ou email
+    - Authentification à deux facteurs (2FA) optionnelle
+
+  PROFIL UTILISATEUR :
+    - Modification des informations personnelles
+    - Gestion des numéros MVola/Orange Money associés
+    - Historique des tickets et transactions
+    - Gestion des notifications (activer/désactiver)
+
+--------------------------------------------------------------------------------
+3.2 Recherche et Sélection de Service
+--------------------------------------------------------------------------------
+
+    - Moteur de recherche par nom d'entité, type de service, localisation
+    - Filtres : catégorie (santé, banque, administration, commerce),
+      ville, disponibilité
+    - Carte géographique interactive avec géolocalisation
+    - Affichage du temps d'attente estimé en temps réel
+    - Informations sur le service : horaires, capacité, description,
+      tarif du ticket
+    - Système de favoris pour les services fréquemment utilisés
+
+--------------------------------------------------------------------------------
+3.3 Réservation et Achat de Ticket
+--------------------------------------------------------------------------------
+
+  PROCESSUS DE RÉSERVATION :
+    1. Sélection du service et de la file souhaitée
+    2. Choix du créneau horaire (si disponible) ou prise de ticket immédiat
+    3. Sélection du mode de paiement (portefeuille ou paiement direct)
+    4. Confirmation et génération du ticket numérique
+    5. Réception du ticket par SMS et notification push
+
+  TICKET NUMÉRIQUE :
+    - QR Code unique associé au ticket
+    - Numéro de ticket, position dans la file, heure estimée d'appel
+    - Possibilité de partager le ticket (PDF téléchargeable)
+    - Annulation possible jusqu'à N minutes avant l'heure estimée
+      (paramétrable par l'admin)
+
+--------------------------------------------------------------------------------
+3.4 Suivi en Temps Réel
+--------------------------------------------------------------------------------
+
+    - Affichage de la position actuelle dans la file
+      (ex : "Vous êtes le 5ème")
+    - Temps d'attente estimé mis à jour toutes les 30 secondes
+    - Barre de progression visuelle
+    - Alertes push/SMS :
+        > Rappel 30 min avant son tour
+        > Alerte quand il reste 3 personnes avant le client
+        > Alerte "Appel imminent"
+    - Possibilité de déclarer une absence temporaire
+      (reporte le client à la fin de la file)
+
+--------------------------------------------------------------------------------
+3.5 Portefeuille Numérique (Wallet)
+--------------------------------------------------------------------------------
+
+  ALIMENTATION DU PORTEFEUILLE :
+    - Dépôt via MVola : initiation depuis l'application,
+      confirmation par code PIN MVola
+    - Dépôt via Orange Money : initiation depuis l'application,
+      confirmation par USSD ou appli Orange Money
+    - Montant minimum de dépôt : 1 000 Ar
+    - Maximum journalier : 20 000 Ar
+    - Confirmation instantanée du dépôt avec mise à jour du solde
+    - Reçu de transaction envoyé par email
+
+  UTILISATION DU PORTEFEUILLE :
+    - Paiement de tickets à partir du solde disponible
+    - Vérification du solde suffisant avant validation
+    - Historique détaillé : date, montant, service, statut
+
+  REMBOURSEMENT :
+    - Remboursement automatique en cas d'annulation du service par l'entité
+    - Demande de remboursement manuel par le client (délai traitement : 48h)
+    - Retrait du solde vers MVola/Orange Money (frais de transaction
+      applicables)
+
+================================================================================
+SECTION 4 — SPÉCIFICATIONS FONCTIONNELLES — MODULE AGENT GUICHET
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 Interface Agent
+--------------------------------------------------------------------------------
+
+L'agent de guichet dispose d'une interface simplifiée, accessible depuis
+navigateur web ou tablette, optimisée pour une utilisation rapide en conditions
+opérationnelles.
+
+  FONCTIONNALITÉS PRINCIPALES :
+    - Connexion à son guichet et à la file assignée
+    - Bouton "Appeler le suivant" (raccourci clavier disponible)
+    - Affichage du ticket en cours : numéro, nom du client, type de service
+    - Scanner le QR Code du ticket via caméra ou lecteur dédié
+    - Valider le ticket (service rendu) ou annuler (client absent)
+    - Voir la liste des prochains clients dans la file
+    - Mettre le guichet en pause (pause déjeuner, incident technique)
+    - Transférer un client vers un autre guichet ou une autre file
+    - Ajouter une note interne sur un dossier client
+
+--------------------------------------------------------------------------------
+4.2 Affichage Public (Écran de Salle)
+--------------------------------------------------------------------------------
+
+Un affichage public peut être projeté sur un écran en salle d'attente :
+    - Liste des numéros appelés et guichets correspondants
+    - Indicateur visuel et sonore lors d'un appel
+    - Estimation du temps d'attente moyen
+    - Personnalisable avec le logo et les couleurs de l'entité
+
+================================================================================
+SECTION 5 — SPÉCIFICATIONS FONCTIONNELLES — BACK-OFFICE ADMINISTRATION
+================================================================================
+
+--------------------------------------------------------------------------------
+5.1 Tableau de Bord Principal
+--------------------------------------------------------------------------------
+
+Le tableau de bord offre une vue synthétique et en temps réel de l'activité :
+
+    - Indicateurs clés : tickets vendus (jour/semaine/mois), revenus,
+      taux de présence, temps moyen d'attente
+    - Graphiques d'affluence par heure, par jour, par service
+    - Alertes en temps réel : file saturée, agent en retard,
+      erreur de paiement
+    - Comparaison avec la période précédente (J-1, S-1, M-1)
+    - Widget de statut des services MVola et Orange Money
+
+--------------------------------------------------------------------------------
+5.2 Gestion des Entités et Services
+--------------------------------------------------------------------------------
+
+  GESTION DES ENTITÉS :
+    - Créer, modifier, activer/désactiver une entité
+      (organisme, commerce, administration)
+    - Informations : nom, logo, adresse, coordonnées GPS,
+      horaires d'ouverture
+    - Paramétrage des jours fériés et fermetures exceptionnelles
+    - Associer plusieurs files à une entité
+
+  GESTION DES FILES D'ATTENTE :
+    - Créer une file avec : nom, description, capacité maximale, priorité
+    - Configurer le tarif du ticket (prix fixe ou gratuit)
+    - Définir les créneaux horaires et la récurrence
+    - Activer/suspendre/fermer une file en temps réel
+    - Paramétrer le délai maximum d'attente avant annulation automatique
+    - Système de priorité : standard / prioritaire (personnes âgées,
+      urgences)
+
+--------------------------------------------------------------------------------
+5.3 Gestion des Utilisateurs et Agents
+--------------------------------------------------------------------------------
+
+  GESTION DES COMPTES CLIENTS :
+    - Liste des clients avec filtres avancés (actif, suspendu, localisation)
+    - Consulter le profil, l'historique et le solde du portefeuille d'un
+      client
+    - Suspendre ou désactiver un compte en cas d'abus
+    - Exporter la liste des clients (CSV, Excel)
+
+  GESTION DES AGENTS :
+    - Créer les comptes agents avec attribution des droits et des files
+    - Définir les horaires de service par agent
+    - Suivre les performances : tickets traités, temps moyen, taux d'absence
+    - Journal des actions de chaque agent (audit log)
+
+--------------------------------------------------------------------------------
+5.4 Gestion Financière et Transactions
+--------------------------------------------------------------------------------
+
+  SUIVI DES TRANSACTIONS :
+    - Liste complète : dépôts, achats de tickets, remboursements
+    - Filtres : date, type, montant, statut (succès, en attente, échoué),
+      opérateur
+    - Détail de chaque transaction : référence, client, montant, commission,
+      statut webhook
+    - Rapprochement automatique avec les relevés MVola et Orange Money
+
+  GESTION FINANCIÈRE :
+    - Configuration des frais de service et commissions
+    - Suivi du chiffre d'affaires par entité, par service, par période
+    - Gestion des remboursements : validation, rejet, traitement
+    - Export comptable en format Excel/PDF
+    - Génération de factures et reçus officiels
+
+--------------------------------------------------------------------------------
+5.5 Configuration Système
+--------------------------------------------------------------------------------
+
+    - Paramètres généraux : nom de la plateforme, logo, devise,
+      fuseau horaire
+    - Configuration des APIs MVola et Orange Money (clés, URLs, webhooks)
+    - Paramétrage des notifications : modèles SMS, push, email
+    - Gestion des rôles et permissions granulaires
+    - Configuration des seuils d'alerte (file saturée, solde bas)
+    - Maintenance programmée : affichage d'un message d'indisponibilité
+
+================================================================================
+SECTION 6 — MODULE NOTIFICATIONS
+================================================================================
+
+--------------------------------------------------------------------------------
+6.1 Types de Notifications et Canaux
+--------------------------------------------------------------------------------
+
+  Événement                  | SMS | Push | Email | Délai
+  ---------------------------+-----+------+-------+------------------
+  Ticket acheté              |  ✓  |  ✓   |   ✓   | Immédiat
+  Rappel 30 min avant        |  ✓  |  ✓   |   —   | 30 min avant
+  3 personnes avant vous     |  ✓  |  ✓   |   —   | Temps réel
+  Vous êtes appelé           |  ✓  |  ✓   |   —   | Immédiat
+  Ticket annulé              |  ✓  |  ✓   |   ✓   | Immédiat
+  Dépôt confirmé             |  ✓  |  ✓   |   ✓   | Immédiat
+  Remboursement effectué     |  ✓  |  ✓   |   ✓   | Immédiat
+
+  IMPLÉMENTATION TECHNIQUE :
+    - Push notifications : Firebase Cloud Messaging (FCM)
+      → Fonctionne pour Android ET iOS depuis une seule API
+    - SMS : Agrégateur local à Madagascar ou Africa's Talking
+    - Email : Service SMTP (ex: SendGrid, Mailgun)
+
+================================================================================
+SECTION 7 — ARCHITECTURE TECHNIQUE DÉTAILLÉE
+================================================================================
+
+--------------------------------------------------------------------------------
+7.1 Vue d'ensemble de l'architecture
+--------------------------------------------------------------------------------
+
+                         ┌─────────────────────────────────┐
+                         │         CLIENTS (utilisateurs)   │
+                         └────────────┬────────────────────┘
+                                      │
+          ┌───────────────────────────┼────────────────────────────┐
+          │                           │                            │
+    ┌─────▼──────┐           ┌────────▼──────┐         ┌──────────▼───────┐
+    │ App Mobile │           │  Portail Web  │         │ Back-office Admin │
+    │React Native│           │   Next.js     │         │     Next.js       │
+    └─────┬──────┘           └────────┬──────┘         └──────────┬───────┘
+          │                           │                            │
+          │           ┌───────────────▼────────────────────────┐  │
+          └───────────►          BACKEND API                   ◄──┘
+                      │     Node.js + NestJS                   │
+                      │                                        │
+                      │  ┌──────────────┐  ┌───────────────┐  │
+                      │  │ PostgreSQL   │  │     Redis     │  │
+                      │  │ (données     │  │ (files temps  │  │
+                      │  │  permanentes)│  │  réel)        │  │
+                      │  └──────────────┘  └───────────────┘  │
+                      └───────────────┬────────────────────────┘
+                                      │
+                    ┌─────────────────┼──────────────────┐
+                    │                 │                  │
+             ┌──────▼──────┐  ┌──────▼──────┐  ┌───────▼──────┐
+             │    MVola     │  │Orange Money │  │  FCM / SMS   │
+             │  API Telma   │  │  API Orange │  │ Notifications│
+             └─────────────┘  └─────────────┘  └──────────────┘
+
+--------------------------------------------------------------------------------
+7.2 Backend API — Modules NestJS
+--------------------------------------------------------------------------------
+
+  Le backend est organisé en modules indépendants :
+
+    Module Auth         → Gestion JWT, OTP, 2FA, sessions
+    Module Users        → Profils clients, comptes agents, admins
+    Module Queues       → Logique des files d'attente, positions, temps
+    Module Tickets      → Génération, QR code, validation, annulation
+    Module Payments     → Intégration MVola, Orange Money, webhooks
+    Module Wallet       → Portefeuille numérique, dépôts, retraits
+    Module Notifications→ SMS, push (FCM), email
+    Module Reports      → Statistiques, exports CSV/Excel/PDF
+    Module Entities     → Gestion des organisations/services
+    Module Config       → Paramètres système, rôles, permissions
+
+--------------------------------------------------------------------------------
+7.3 Base de données — Tables principales (PostgreSQL)
+--------------------------------------------------------------------------------
+
+  users              → Comptes clients et agents
+  entities           → Organisations, commerces, administrations
+  queues             → Files d'attente par entité
+  tickets            → Tickets achetés (avec QR code, statut, position)
+  transactions       → Toutes les transactions financières
+  wallets            → Soldes des portefeuilles clients
+  notifications      → Historique des notifications envoyées
+  agents             → Profils agents et leurs files assignées
+  audit_logs         → Journal de toutes les actions système
+
+--------------------------------------------------------------------------------
+7.4 Gestion du temps réel (WebSockets + Redis)
+--------------------------------------------------------------------------------
+
+  Le suivi de la file en temps réel fonctionne ainsi :
+
+    1. Quand un agent valide un ticket → le backend émet un événement
+       WebSocket vers tous les clients connectés à cette file
+    2. L'app mobile reçoit l'événement → affiche "Vous êtes maintenant 4ème"
+    3. Redis stocke la position de chaque client dans la file en mémoire
+       (ultra-rapide, pas besoin d'interroger PostgreSQL à chaque fois)
+    4. Toutes les 30 secondes : recalcul du temps d'attente estimé
+
+--------------------------------------------------------------------------------
+7.5 Intégration paiement — MVola et Orange Money
+--------------------------------------------------------------------------------
+
+  FLUX DE PAIEMENT MVola :
+    1. Client appuie sur "Payer avec MVola" dans l'app
+    2. Le backend initie une demande de paiement via l'API MVola
+    3. MVola envoie une notification USSD/push sur le téléphone du client
+    4. Client confirme avec son code PIN MVola
+    5. MVola envoie un webhook au backend (confirmation du paiement)
+    6. Le backend valide le ticket et notifie le client
+
+  FLUX DE PAIEMENT Orange Money : identique, via l'API Orange Money
+
+  SÉCURITÉ :
+    - Les clés API MVola et Orange Money ne sont JAMAIS exposées côté client
+    - Toutes les transactions passent uniquement par le backend
+    - Les webhooks sont vérifiés par signature cryptographique
+
+================================================================================
+SECTION 8 — EXIGENCES NON FONCTIONNELLES
+================================================================================
+
+--------------------------------------------------------------------------------
+8.1 Performance
+--------------------------------------------------------------------------------
+
+    - Temps de réponse API < 500ms pour 95% des requêtes
+    - Mise à jour position file : délai max 30 secondes
+    - Support simultané : 500 utilisateurs connectés minimum (V1.0)
+    - Disponibilité cible : 99.5% (hors maintenance programmée)
+
+--------------------------------------------------------------------------------
+8.2 Sécurité
+--------------------------------------------------------------------------------
+
+    - Authentification JWT avec refresh token
+    - HTTPS obligatoire sur toutes les communications
+    - Données sensibles chiffrées en base (mots de passe : bcrypt)
+    - Les clés API de paiement stockées en variables d'environnement
+      (jamais dans le code source)
+    - Protection CSRF, rate limiting sur les endpoints sensibles
+    - Logs de sécurité et audit trail complet
+
+--------------------------------------------------------------------------------
+8.3 Accessibilité et compatibilité
+--------------------------------------------------------------------------------
+
+    - App mobile : Android 8.0+ / iOS 13+
+    - Web : Chrome, Firefox, Safari (2 dernières versions majeures)
+    - Interface responsive (s'adapte aux petits écrans)
+    - Langues supportées : Français, Anglais, Malagasy
+
+================================================================================
+SECTION 9 — PHASES DE DÉVELOPPEMENT (ROADMAP)
+================================================================================
+
+  PHASE 1 — Fondations (Mois 1-2)
+    - Mise en place du backend (NestJS, PostgreSQL, Redis)
+    - Module authentification (inscription, connexion, OTP)
+    - Interface admin de base (gestion entités et files)
+    - Aucune fonctionnalité de paiement encore
+
+  PHASE 2 — Cœur fonctionnel (Mois 3-4)
+    - App mobile (React Native) — version MVP
+    - Portail web client (Next.js)
+    - Système de tickets (génération, QR code, suivi)
+    - Temps réel WebSocket (position dans la file)
+
+  PHASE 3 — Paiement et notifications (Mois 5-6)
+    - Intégration API MVola
+    - Intégration API Orange Money
+    - Portefeuille numérique (wallet)
+    - Module notifications (SMS, push FCM, email)
+
+  PHASE 4 — Back-office avancé et rapports (Mois 7-8)
+    - Tableaux de bord et statistiques
+    - Exports comptables (Excel, PDF)
+    - Interface agent guichet complète
+    - Affichage public (écran de salle)
+
+  PHASE 5 — Tests, optimisation et lancement (Mois 9-10)
+    - Tests de charge et performance
+    - Sécurité et audit
+    - Beta test avec entités partenaires
+    - Lancement public
+
+================================================================================
+ANNEXES
+================================================================================
+
+--------------------------------------------------------------------------------
+Annexe A — Glossaire
+--------------------------------------------------------------------------------
+
+  QueuePay      : Nom de la plateforme développée
+  Ticket        : Droit d'accès numérique à un service, avec un numéro
+                  de passage dans la file
+  QR Code       : Code à barres 2D unique associé à chaque ticket
+  Wallet        : Portefeuille numérique interne à QueuePay
+  MVola         : Service de paiement mobile de l'opérateur Telma (Madagascar)
+  Orange Money  : Service de paiement mobile d'Orange Madagascar
+  Webhook       : Notification automatique envoyée par MVola/Orange Money
+                  au backend quand un paiement est confirmé
+  WebSocket     : Technologie permettant la communication en temps réel
+                  entre le serveur et l'application
+  JWT           : Token d'authentification sécurisé (JSON Web Token)
+  OTP           : One-Time Password — code SMS à usage unique
+  FCM           : Firebase Cloud Messaging — service de push notifications
+  NestJS        : Framework backend Node.js structuré en modules
+  React Native  : Framework mobile permettant de créer des apps Android
+                  et iOS avec le même code JavaScript
+  Next.js       : Framework web React pour créer des sites et applications
+                  web modernes
+  Redis         : Base de données en mémoire, utilisée pour la gestion
+                  des files en temps réel (ultra-rapide)
+  PostgreSQL    : Base de données relationnelle robuste, utilisée pour
+                  stocker toutes les données permanentes
+
+--------------------------------------------------------------------------------
+Annexe B — Contacts et informations projet
+--------------------------------------------------------------------------------
+
+  Document      : Cahier des Charges QueuePay V1.0
+  Statut        : En cours de validation
+  Année         : 2026
+  Confidentialité : Document confidentiel — usage interne uniquement
+
+================================================================================
+                    FIN DU DOCUMENT — QueuePay CDC V1.0
+================================================================================

@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # ──────────────────────────────────────────────
+  # PostgreSQL 16 — Base de données principale
+  # ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: queuepay_postgres
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-queuepay}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-queuepay_secret}
+      POSTGRES_DB: ${DB_NAME:-queuepay_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-queuepay}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────
+  # Redis 7 — Cache & files d'attente temps réel
+  # ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: queuepay_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-queuepay_redis}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-queuepay_redis}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
