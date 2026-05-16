@@ -1,16 +1,29 @@
 import { DataSource } from 'typeorm';
 import { seedSuperAdmin } from './super-admin.seed';
 import configuration from '../../config/configuration';
+import * as dotenv from 'dotenv';
+import { join } from 'path';
+
+dotenv.config({ path: join(__dirname, '../../../../.env') });
 
 const config = configuration();
 
+const dbUrl = config.database.url;
+
 const dataSource = new DataSource({
   type: 'postgres',
-  host: config.database.host,
-  port: config.database.port,
-  username: config.database.username,
-  password: config.database.password,
-  database: config.database.name,
+  ...(dbUrl
+    ? {
+        url: dbUrl,
+        ssl: { rejectUnauthorized: false },
+      }
+    : {
+        host: config.database.host,
+        port: config.database.port,
+        username: config.database.username,
+        password: config.database.password,
+        database: config.database.name,
+      }),
   entities: [__dirname + '/../../**/*.entity{.ts,.js}'],
   synchronize: true,
 });

@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { DataSource } from 'typeorm';
+import { seedSuperAdmin } from './database/seeds/super-admin.seed';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -56,6 +58,11 @@ async function bootstrap() {
 
   // ── Lancement ─────────────────────────────────
   const port = process.env.APP_PORT || 3001;
+
+  // ── Auto-seed (temporaire pour déploiement) ───
+  const dataSource = app.get(DataSource);
+  await seedSuperAdmin(dataSource);
+
   await app.listen(port);
   console.log(`\n🚀 QueuePay API running on: http://localhost:${port}`);
   console.log(`📚 Swagger docs:            http://localhost:${port}/api/docs`);

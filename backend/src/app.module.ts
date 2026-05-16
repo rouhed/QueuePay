@@ -42,7 +42,7 @@ import { WebSocketModule } from './modules/websocket/websocket.module';
                 database: config.get<string>('database.name'),
               }),
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          synchronize: isDev,
+          synchronize: true, // Force to true temporarily to create tables on Render
           logging: isDev,
         };
       },
