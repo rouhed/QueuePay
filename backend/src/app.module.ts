@@ -34,16 +34,16 @@ import { ReportsModule } from './modules/reports/reports.module';
           type: 'postgres',
           ...(dbUrl
             ? {
-                url: dbUrl,
-                ssl: { rejectUnauthorized: false }, // Requis par Neon/Render
-              }
+              url: dbUrl,
+              ssl: { rejectUnauthorized: false }, // Requis par Neon/Render
+            }
             : {
-                host: config.get<string>('database.host'),
-                port: config.get<number>('database.port'),
-                username: config.get<string>('database.username'),
-                password: config.get<string>('database.password'),
-                database: config.get<string>('database.name'),
-              }),
+              host: config.get<string>('database.host'),
+              port: config.get<number>('database.port'),
+              username: config.get<string>('database.username'),
+              password: config.get<string>('database.password'),
+              database: config.get<string>('database.name'),
+            }),
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: true, // Force to true temporarily to create tables on Render
           logging: isDev,
@@ -67,4 +67,4 @@ import { ReportsModule } from './modules/reports/reports.module';
     WebSocketModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }
