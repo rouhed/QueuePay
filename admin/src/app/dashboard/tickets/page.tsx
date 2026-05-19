@@ -82,6 +82,26 @@ export default function TicketsPage() {
 
   useEffect(() => { loadTickets(); }, [loadTickets]);
 
+  const handleExport = async () => {
+    if (!token) return;
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (statusFilter) params.set('status', statusFilter);
+      
+      const blob = await ticketsApi.exportCsv(token, params.toString());
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tickets_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Erreur lors de l'export CSV");
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -89,7 +109,10 @@ export default function TicketsPage() {
           <h1>🎟️ Tickets</h1>
           <p className="page-subtitle">{meta.total} tickets enregistrés</p>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => loadTickets()}>🔄 Actualiser</button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn-secondary btn-sm" onClick={handleExport}>📥 Exporter CSV</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => loadTickets()}>🔄 Actualiser</button>
+        </div>
       </div>
 
       {/* Stats mini */}

@@ -62,6 +62,16 @@ export default function UsersPage() {
     } catch (err: any) { alert(err.message); }
   };
 
+  // ── Changer de Rôle ───────────────────────────
+  const changeRole = async (user: UserItem, newRole: string) => {
+    if (!token) return;
+    if (!confirm(`Changer le rôle de ${user.firstName} en ${newRole} ?`)) return;
+    try {
+      await usersApi.update(user.id, { role: newRole }, token);
+      loadUsers();
+    } catch (err: any) { alert(err.message); }
+  };
+
   // ── Supprimer ─────────────────────────────────
   const handleDelete = async (id: string) => {
     if (!token || !confirm('Supprimer cet utilisateur ?')) return;
@@ -168,9 +178,17 @@ export default function UsersPage() {
                   <td style={{ color: 'var(--text-secondary)' }}>{user.email}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{user.phone}</td>
                   <td>
-                    <span className={`badge ${roleBadge[user.role]?.class || 'badge-neutral'}`}>
-                      {roleBadge[user.role]?.label || user.role}
-                    </span>
+                    <select
+                      className={`badge ${roleBadge[user.role]?.class || 'badge-neutral'}`}
+                      value={user.role}
+                      onChange={(e) => changeRole(user, e.target.value)}
+                      style={{ border: 'none', cursor: 'pointer', outline: 'none' }}
+                    >
+                      <option value="super_admin">Super Admin</option>
+                      <option value="admin">Admin</option>
+                      <option value="agent">Agent</option>
+                      <option value="client">Client</option>
+                    </select>
                   </td>
                   <td>
                     <span

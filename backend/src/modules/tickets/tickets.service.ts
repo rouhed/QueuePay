@@ -18,6 +18,7 @@ import { Queue } from '../queues/entities/queue.entity';
 import { CreateTicketDto, ValidateTicketDto, QueryTicketDto } from './dto';
 import { TicketStatus, QueueStatus, PaymentMethod } from '../../common/enums';
 import { WebSocketService } from '../websocket/websocket.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class TicketsService {
@@ -27,6 +28,7 @@ export class TicketsService {
     @InjectRepository(Queue)
     private readonly queuesRepo: Repository<Queue>,
     private readonly wsService: WebSocketService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ── Générer un numéro de ticket unique ────────
@@ -44,6 +46,7 @@ export class TicketsService {
     const ticketsInQueue = await this.ticketsRepo.find({
       where: { queueId, status: TicketStatus.IN_QUEUE },
       order: { positionInQueue: 'ASC' },
+      relations: ['client'],
     });
 
     const avgServiceTime = 5; // minutes par ticket (à rendre dynamique plus tard)
@@ -77,6 +80,15 @@ export class TicketsService {
           estimatedWaitMinutes: position * avgServiceTime,
           message: messages[position],
         });
+
+        // Push / SMS via NotificationsService
+        if (ticket.client) {
+          await this.notificationsService.notifyTicketApproaching(
+            ticket.client,
+            ticket.ticketNumber,
+            position,
+          );
+        }
       }
     }
   }
@@ -271,6 +283,33 @@ export class TicketsService {
       agentName: null, // TODO: récupérer le nom de l'agent
     });
 
+    // 📱 Push / SMS notification
+    if (savedTicket.client) {
+      await this.notificationsService.notifyTicketCalled(
+        savedTicket.client,
+        savedTicket.ticketNumber,
+        savedTicket.counterNumber || 1,
+      );
+    }
+
+    // 📺 Mettre à jour l'affichage public
+    if (savedTicket.entityId) {
+      const recentCalledTickets = await this.ticketsRepo.find({
+        where: { entityId: savedTicket.entityId, status: TicketStatus.CALLED },
+        order: { calledAt: 'DESC' },
+        take: 5,
+      });
+
+      this.wsService.emitPublicDisplay(savedTicket.entityId, {
+        calledTickets: recentCalledTickets.map(t => ({
+          ticketNumber: t.ticketNumber,
+          counterNumber: t.counterNumber || 1,
+          calledAt: t.calledAt ? t.calledAt.toISOString() : new Date().toISOString(),
+        })),
+        currentWaitTime: 5, // Todo: calculate actual wait time
+      });
+    }
+
     // 🔌 WebSocket : mettre à jour les positions de toute la file
     await this.emitQueueUpdate(queueId);
 
@@ -424,5 +463,21 @@ export class TicketsService {
   // ── Comptage total ────────────────────────────
   async countTotal(): Promise<number> {
     return this.ticketsRepo.count();
+  }
+
+  // ── Export CSV ────────────────────────────────
+  async exportCsv(query: QueryTicketDto): Promise<string> {
+    // Override pagination for export
+    const exportQuery = { ...query, page: 1, limit: 10000 };
+    const { data } = await this.findAll(exportQuery);
+
+    let csv = 'Ticket,File,Client,Statut,Prix,Methode Paiement,Date Creation\n';
+    for (const t of data) {
+      const queueName = t.queue ? t.queue.name : 'N/A';
+      const clientName = t.clientName || 'Anonyme';
+      const date = t.createdAt ? t.createdAt.toISOString() : '';
+      csv += `${t.ticketNumber},"${queueName}","${clientName}",${t.status},${t.price},${t.paymentMethod},${date}\n`;
+    }
+    return csv;
   }
 }

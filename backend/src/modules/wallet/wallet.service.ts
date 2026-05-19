@@ -10,6 +10,7 @@ import { Wallet } from './entities/wallet.entity';
 import { Transaction, TransactionType } from './entities/transaction.entity';
 import { DepositDto, PayTicketDto, WithdrawDto, QueryTransactionsDto } from './dto';
 import { TransactionStatus, PaymentMethod } from '../../common/enums';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class WalletService {
@@ -22,6 +23,7 @@ export class WalletService {
     private readonly walletRepo: Repository<Wallet>,
     @InjectRepository(Transaction)
     private readonly transactionRepo: Repository<Transaction>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ── Créer un wallet pour un nouvel utilisateur ─
@@ -104,7 +106,16 @@ export class WalletService {
       description: `Dépôt de ${dto.amount.toLocaleString()} Ar via ${this.formatPaymentMethod(dto.paymentMethod)}`,
     });
 
-    return this.transactionRepo.save(transaction);
+    const savedTransaction = await this.transactionRepo.save(transaction);
+    
+    // Notify user
+    await this.notificationsService.sendDepositReceipt(
+      wallet.user,
+      dto.amount,
+      this.formatPaymentMethod(dto.paymentMethod),
+    );
+
+    return savedTransaction;
   }
 
   // ── Payer un ticket depuis le wallet ──────────

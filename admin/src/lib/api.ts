@@ -197,12 +197,83 @@ export const ticketsApi = {
 
   getByQueue: (queueId: string, token: string) =>
     fetchApi<any[]>(`/tickets/queue/${queueId}`, { token }),
+
+  exportCsv: async (token: string, params?: string) => {
+    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/tickets/export/csv${params ? `?${params}` : ''}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Erreur lors de l\'export');
+    return res.blob();
+  },
 };
 
 // ── Wallet endpoints ────────────────────────────
 export const walletApi = {
   getStats: (token: string) =>
     fetchApi<any>('/wallet/stats', { token }),
+
+  getBalance: (token: string) =>
+    fetchApi<{ balance: number; currency: string }>('/wallet/balance', { token }),
+
+  getTransactions: (token: string, params?: string) =>
+    fetchApi<{ data: any[]; meta: any }>(`/wallet/transactions${params ? `?${params}` : ''}`, { token }),
+
+  deposit: (data: any, token: string) =>
+    fetchApi<any>('/wallet/deposit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+};
+
+// ── Payments endpoints ──────────────────────────
+export const paymentsApi = {
+  initiate: (data: any, token: string) =>
+    fetchApi<any>('/payments/initiate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  getStatus: (id: string, token: string) =>
+    fetchApi<any>(`/payments/${id}/status`, { token }),
+
+  getAll: (token: string, params?: string) =>
+    fetchApi<{ data: any[]; meta: any }>(`/payments${params ? `?${params}` : ''}`, { token }),
+
+  getStats: (token: string) =>
+    fetchApi<any>('/payments/stats/summary', { token }),
+};
+
+// ── Reports endpoints ───────────────────────────
+export const reportsApi = {
+  getDashboard: (token: string) =>
+    fetchApi<any>('/reports/dashboard', { token }),
+
+  getHourly: (token: string, date?: string) =>
+    fetchApi<any[]>(`/reports/hourly${date ? `?date=${date}` : ''}`, { token }),
+
+  getRevenue: (token: string, period: string = 'week') =>
+    fetchApi<any[]>(`/reports/revenue?period=${period}`, { token }),
+
+  exportExcel: async (token: string, dateFrom?: string, dateTo?: string) => {
+    const params = new URLSearchParams();
+    if (dateFrom) params.append('dateFrom', dateFrom);
+    if (dateTo) params.append('dateTo', dateTo);
+    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/reports/export/excel?${params}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Erreur export Excel');
+    return res.blob();
+  },
+
+  exportPDF: async (token: string, dateFrom?: string, dateTo?: string) => {
+    const params = new URLSearchParams();
+    if (dateFrom) params.append('dateFrom', dateFrom);
+    if (dateTo) params.append('dateTo', dateTo);
+    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/reports/export/pdf?${params}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Erreur export PDF');
+    return res.blob();
+  },
 };
 
 // ── Audit endpoints ─────────────────────────────
@@ -212,3 +283,4 @@ export const auditApi = {
 };
 
 export default fetchApi;
+

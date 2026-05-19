@@ -8,7 +8,9 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TicketsService } from './tickets.service';
@@ -33,6 +35,18 @@ export class TicketsController {
   @ApiOperation({ summary: 'Lister les tickets avec filtres' })
   findAll(@Query() query: QueryTicketDto) {
     return this.ticketsService.findAll(query);
+  }
+
+  // ── Export CSV ──────────────────────────────
+  @Get('export/csv')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Exporter les tickets en CSV' })
+  async exportCsv(@Query() query: QueryTicketDto, @Res() res: Response) {
+    const csvData = await this.ticketsService.exportCsv(query);
+    res.header('Content-Type', 'text/csv');
+    res.attachment('tickets_export.csv');
+    return res.send(csvData);
   }
 
   // ── Statistiques ──────────────────────────────

@@ -3,7 +3,9 @@
 import { useAuth } from '@/lib/auth';
 import { useEffect, useState, useCallback } from 'react';
 import { entitiesApi, queuesApi, usersApi, ticketsApi } from '@/lib/api';
-
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 interface DashboardStats {
   entities: number;
   queues: number;
@@ -102,6 +104,46 @@ export default function DashboardPage() {
     done: '✅',
   };
 
+  const exportToPDF = () => {
+    if (!stats) return;
+    const doc = new jsPDF();
+    doc.text('Rapport QueuePay - Tableau de Bord', 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 28);
+    
+    autoTable(doc, {
+      startY: 35,
+      head: [['Métrique', 'Valeur']],
+      body: [
+        ['Entités actives', stats.entities],
+        ['Files d\'attente', stats.queues],
+        ['Utilisateurs', stats.users],
+        ['Tickets aujourd\'hui', stats.ticketsToday],
+        ['Tickets en attente', stats.ticketsInQueue],
+        ['Revenus du jour', `${stats.revenueToday} Ar`],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [108, 92, 231] }
+    });
+    
+    doc.save('QueuePay_Rapport.pdf');
+  };
+
+  const exportToExcel = () => {
+    if (!stats) return;
+    const ws = XLSX.utils.json_to_sheet([
+      { Métrique: 'Entités actives', Valeur: stats.entities },
+      { Métrique: 'Files d\'attente', Valeur: stats.queues },
+      { Métrique: 'Utilisateurs', Valeur: stats.users },
+      { Métrique: 'Tickets aujourd\'hui', Valeur: stats.ticketsToday },
+      { Métrique: 'Tickets en attente', Valeur: stats.ticketsInQueue },
+      { Métrique: 'Revenus du jour (Ar)', Valeur: stats.revenueToday },
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Statistiques');
+    XLSX.writeFile(wb, 'QueuePay_Rapport.xlsx');
+  };
+
   return (
     <div>
       {/* Page Header */}
@@ -116,7 +158,8 @@ export default function DashboardPage() {
           <button className="btn btn-secondary btn-sm" onClick={loadStats}>
             🔄 Actualiser
           </button>
-          <button className="btn btn-primary btn-sm">📊 Exporter</button>
+          <button className="btn btn-primary btn-sm" onClick={exportToPDF}>📄 PDF</button>
+          <button className="btn btn-primary btn-sm" onClick={exportToExcel} style={{backgroundColor: '#00b894', borderColor: '#00b894'}}>📊 Excel</button>
         </div>
       </div>
 

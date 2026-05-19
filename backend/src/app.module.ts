@@ -10,6 +10,9 @@ import { TicketsModule } from './modules/tickets/tickets.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { WebSocketModule } from './modules/websocket/websocket.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -56,6 +59,9 @@ import { WebSocketModule } from './modules/websocket/websocket.module';
     TicketsModule,
     WalletModule,
     AuditModule,
+    NotificationsModule,
+    PaymentsModule,
+    ReportsModule,
 
     // ── Temps réel ────────────────────────────────
     WebSocketModule,

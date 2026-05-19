@@ -15,6 +15,7 @@ export default () => ({
     name: process.env.DB_NAME || 'queuepay_db',
   },
   redis: {
+    url: process.env.REDIS_URL, // Upstash cloud (rediss://...)
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     password: process.env.REDIS_PASSWORD || 'queuepay_redis',

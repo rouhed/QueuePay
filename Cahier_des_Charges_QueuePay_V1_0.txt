@@ -58,6 +58,11 @@ son moment.
 
   AVEC QueuePay (la solution) :
 
+  ÉTAPE 0 — Configuration par l'Administration (Super Admin)
+    → Le Super Admin crée les "Entités" (ex: Banque BOA, Hôpital HJRA, Mairie)
+    → Il y associe un logo/photo, les adresses, et les services disponibles
+    → Il crée les files d'attente pour chaque service.
+
   ÉTAPE 1 — Le client cherche le service depuis son téléphone
     → Il ouvre l'app QueuePay sur son téléphone
     → Il tape "Mairie" ou "Document officiel" dans la barre de recherche
@@ -425,14 +430,15 @@ opérationnelles.
     - Ajouter une note interne sur un dossier client
 
 --------------------------------------------------------------------------------
-4.2 Affichage Public (Écran de Salle)
+4.2 Affichage Public (Écran de Salle / Grande Interface TV)
 --------------------------------------------------------------------------------
 
-Un affichage public peut être projeté sur un écran en salle d'attente :
-    - Liste des numéros appelés et guichets correspondants
-    - Indicateur visuel et sonore lors d'un appel
-    - Estimation du temps d'attente moyen
-    - Personnalisable avec le logo et les couleurs de l'entité
+Un affichage public (grande interface) peut être projeté sur un écran géant ou une TV en salle d'attente :
+    - Liste des numéros appelés actuellement et les guichets correspondants
+    - Affichage des tickets en attente pour chaque service
+    - Indicateur visuel clignotant et alerte sonore lors d'un nouvel appel
+    - Estimation du temps d'attente moyen global
+    - Personnalisable avec le logo et les couleurs de l'entité (Banque, Hôpital)
 
 ================================================================================
 SECTION 5 — SPÉCIFICATIONS FONCTIONNELLES — BACK-OFFICE ADMINISTRATION

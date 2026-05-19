@@ -11,8 +11,10 @@ interface NavItem {
 
 const mainNav: NavItem[] = [
   { label: 'Tableau de bord', href: '/dashboard', icon: '📊' },
+  { label: 'Guichet Agent', href: '/dashboard/guichet', icon: '🖥️' },
   { label: 'Entités', href: '/dashboard/entities', icon: '🏢' },
   { label: 'Files d\'attente', href: '/dashboard/queues', icon: '🎫' },
+  { label: 'Écran Salle (TV)', href: '/tv', icon: '📺' },
   { label: 'Tickets', href: '/dashboard/tickets', icon: '🎟️' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: '💰' },
 ];
