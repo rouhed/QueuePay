@@ -1,156 +1,211 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { queuesApi } from '@/lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/lib/auth';
+import { queuesApi, entitiesApi } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
 
-export default function TvDisplayPage() {
-  const [queues, setQueues] = useState<any[]>([]);
-  const [selectedQueue, setSelectedQueue] = useState<string>('');
-  const [calledTickets, setCalledTickets] = useState<any[]>([]);
-  const [currentWaitTime, setCurrentWaitTime] = useState<number>(0);
+export default function TVDisplay() {
+  const { user, token } = useAuth();
+  const [entities, setEntities] = useState<any[]>([]);
+  const [selectedEntity, setSelectedEntity] = useState<string>('');
+  
+  const [activeCalls, setActiveCalls] = useState<any[]>([]);
+  const [latestCall, setLatestCall] = useState<any | null>(null);
+  const [isBlinking, setIsBlinking] = useState(false);
+  
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [flash, setFlash] = useState(false);
+  
+  const synthRef = useRef<SpeechSynthesis | null>(null);
 
   useEffect(() => {
-    // We fetch queues without token because TV display might be a public screen,
-    // but in our current API queuesApi.getAll requires token.
-    // For simplicity, we just fetch with an empty token or we can ask the user to select.
-    // Actually, we can get token from local storage if logged in as admin/agent.
-    const token = localStorage.getItem('access_token') || '';
-    if (token) {
-      queuesApi.getAll(token).then((res) => {
-        setQueues(res.data);
-        if (res.data.length > 0) setSelectedQueue(res.data[0].id);
-      }).catch(console.error);
+    if (typeof window !== 'undefined') {
+      synthRef.current = window.speechSynthesis;
     }
   }, []);
 
+  // Charger les entités pour sélectionner l'écran TV
   useEffect(() => {
-    if (!selectedQueue) return;
+    if (token) {
+      loadEntities();
+    }
+  }, [token]);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    const baseUrl = API_URL.replace('/api/v1', '');
-    
-    const newSocket = io(baseUrl, {
-      transports: ['websocket'],
-    });
+  const loadEntities = async () => {
+    try {
+      const res = await entitiesApi.getAll(token!);
+      setEntities(res.data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Gestion WebSocket
+  useEffect(() => {
+    if (!selectedEntity || !token) return;
+
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:3001';
+    const newSocket = io(socketUrl, { auth: { token } });
 
     newSocket.on('connect', () => {
-      console.log('TV Connected to WebSocket');
-      // Temporarily use queueId as entityId if needed, but the event is join:display
-      newSocket.emit('join:display', { entityId: selectedQueue });
+      newSocket.emit('join:display', { entityId: selectedEntity });
     });
 
-    newSocket.on('display:updated', (data: any) => {
-      console.log('Display Updated:', data);
-      if (data.calledTickets && data.calledTickets.length > 0) {
-        setCalledTickets(data.calledTickets);
-        setFlash(true);
-        // Play a sound
-        try {
-          const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-          audio.play().catch(() => {});
-        } catch (e) {}
-
-        setTimeout(() => setFlash(false), 3000);
-      }
-      if (data.currentWaitTime !== undefined) {
-        setCurrentWaitTime(data.currentWaitTime);
+    newSocket.on('ticket_status_changed', (data: any) => {
+      if (data.status === 'called') {
+        handleNewCall(data);
       }
     });
 
     setSocket(newSocket);
 
+    // Initialiser les appels actifs (simulation fetch)
+    fetchActiveCalls(selectedEntity);
+
     return () => {
       newSocket.disconnect();
     };
-  }, [selectedQueue]);
+  }, [selectedEntity, token]);
 
-  if (!selectedQueue) {
+  const fetchActiveCalls = async (entityId: string) => {
+    // Dans une implémentation complète, on ferait un GET /tickets?entityId=...&status=called
+    // Pour l'instant on garde le tableau local vide au démarrage
+  };
+
+  const handleNewCall = (ticket: any) => {
+    setLatestCall(ticket);
+    setActiveCalls(prev => [ticket, ...prev.filter(t => t.id !== ticket.id)].slice(0, 5));
+    
+    // Effet visuel clignotant
+    setIsBlinking(true);
+    setTimeout(() => setIsBlinking(false), 5000);
+
+    // Annonce sonore (Synthèse vocale)
+    if (synthRef.current) {
+      const utterance = new SpeechSynthesisUtterance(`Ticket ${ticket.ticketNumber}, au guichet.`);
+      utterance.lang = 'fr-FR';
+      utterance.rate = 0.9;
+      synthRef.current.speak(utterance);
+    }
+  };
+
+  if (!selectedEntity) {
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0f0f13', color: 'white' }}>
-        <h1 style={{ marginBottom: 20 }}>Configuration de l'Écran Salle</h1>
-        <select 
-          className="input" 
-          value={selectedQueue} 
-          onChange={(e) => setSelectedQueue(e.target.value)}
-          style={{ width: 300, background: '#1e1e2d', color: 'white', padding: 15, borderRadius: 8, border: '1px solid #333' }}
-        >
-          <option value="">Sélectionner une file...</option>
-          {queues.map(q => (
-            <option key={q.id} value={q.id}>{q.name}</option>
-          ))}
-        </select>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0f0f1a', color: '#fff' }}>
+        <div className="glass-card" style={{ padding: '40px', width: '400px', textAlign: 'center' }}>
+          <h2>Configuration Écran TV</h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Sélectionnez l'entité à afficher sur cet écran</p>
+          <select 
+            className="input" 
+            value={selectedEntity} 
+            onChange={(e) => setSelectedEntity(e.target.value)}
+            style={{ width: '100%', padding: '15px', background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px' }}
+          >
+            <option value="">-- Choisir une entité --</option>
+            {entities.map(e => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{ 
-      height: '100vh', 
-      width: '100vw', 
-      background: flash ? '#6c5ce7' : '#0f0f13', 
-      transition: 'background 0.5s ease',
-      color: 'white', 
+      minHeight: '100vh', 
+      background: isBlinking ? '#2d0a0a' : '#0a0a0f', 
+      color: '#fff', 
       display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      fontFamily: 'system-ui, sans-serif'
+      flexDirection: 'column',
+      transition: 'background 0.5s ease',
+      padding: '2vw'
     }}>
-      <div style={{ position: 'absolute', top: 30, left: 30, display: 'flex', alignItems: 'center', gap: 15 }}>
-        <div style={{ width: 50, height: 50, background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 'bold' }}>
-          Q
+      {/* HEADER */}
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid rgba(255,255,255,0.1)', paddingBottom: '20px', marginBottom: '30px' }}>
+        <div style={{ fontSize: '2.5vw', fontWeight: 'bold' }}>
+          Queue<span style={{ color: '#00b894' }}>Pay</span>
         </div>
-        <h2 style={{ margin: 0, fontSize: '1.5rem', opacity: 0.8 }}>QueuePay - Affichage Salle</h2>
-      </div>
+        <div style={{ fontSize: '2vw', color: '#a0a0b0' }}>
+          {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+        </div>
+      </header>
 
-      <div style={{ textAlign: 'center' }}>
-        <h3 style={{ fontSize: '3rem', margin: 0, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 2 }}>
-          {flash ? 'Veuillez vous présenter' : 'Derniers numéros appelés'}
-        </h3>
+      {/* MAIN CONTENT */}
+      <div style={{ display: 'flex', flex: 1, gap: '30px' }}>
         
-        {calledTickets.length > 0 ? (
-          <div>
-            <div style={{ 
-              fontSize: '10rem', 
-              fontWeight: 900, 
-              margin: '20px 0', 
-              lineHeight: 1,
-              textShadow: flash ? '0 0 50px rgba(255,255,255,0.5)' : 'none',
-              color: flash ? '#fff' : '#6c5ce7'
-            }}>
-              {calledTickets[0].ticketNumber}
+        {/* DERNIER APPEL (GRAND ECRAN) */}
+        <div style={{ 
+          flex: 2, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          background: isBlinking ? 'rgba(255, 71, 87, 0.2)' : 'rgba(255,255,255,0.02)',
+          border: isBlinking ? '4px solid #ff4757' : '1px solid rgba(255,255,255,0.05)',
+          borderRadius: '30px',
+          boxShadow: isBlinking ? '0 0 50px rgba(255, 71, 87, 0.5)' : 'none',
+          animation: isBlinking ? 'pulse 1s infinite' : 'none'
+        }}>
+          {latestCall ? (
+            <>
+              <div style={{ fontSize: '3vw', color: '#a0a0b0', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '5px' }}>
+                Numéro appelé
+              </div>
+              <div style={{ fontSize: '15vw', fontWeight: '900', lineHeight: '1', color: isBlinking ? '#ff4757' : '#fff', textShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                {latestCall.ticketNumber}
+              </div>
+              <div style={{ fontSize: '4vw', color: '#00b894', marginTop: '20px', fontWeight: 'bold' }}>
+                Aller au Guichet
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: '4vw', color: 'rgba(255,255,255,0.2)' }}>
+              En attente d'appels...
             </div>
-            <div style={{ fontSize: '2rem', opacity: 0.8, background: 'rgba(255,255,255,0.1)', padding: '10px 30px', borderRadius: 50, display: 'inline-block', marginBottom: '40px' }}>
-              Guichet {calledTickets[0].counterNumber || 1} • Appelé à {new Date(calledTickets[0].calledAt || Date.now()).toLocaleTimeString()}
-            </div>
-          </div>
-        ) : (
-          <div style={{ fontSize: '10rem', fontWeight: 900, margin: '20px 0', color: '#6c5ce7', opacity: 0.5 }}>---</div>
-        )}
-        
-        {calledTickets.length > 1 && (
-          <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '20px' }}>
-            {calledTickets.slice(1, 4).map((t, i) => (
-              <div key={i} style={{ background: '#1e1e2d', padding: '15px 30px', borderRadius: '15px', border: '1px solid #333' }}>
-                <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#a29bfe' }}>{t.ticketNumber}</div>
-                <div style={{ opacity: 0.6 }}>Guichet {t.counterNumber || 1}</div>
+          )}
+        </div>
+
+        {/* HISTORIQUE DES APPELS (BARRE LATÉRALE) */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.3)', borderRadius: '30px', padding: '30px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <h2 style={{ fontSize: '2vw', marginBottom: '20px', color: '#a0a0b0', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '15px' }}>
+            Précédents appels
+          </h2>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            {activeCalls.slice(1).map((call, idx) => (
+              <div key={call.id} style={{ 
+                background: 'rgba(255,255,255,0.05)', 
+                padding: '20px', 
+                borderRadius: '15px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '2vw',
+                fontWeight: 'bold'
+              }}>
+                <span style={{ color: '#fff' }}>{call.ticketNumber}</span>
+                <span style={{ color: '#6c5ce7', fontSize: '1.5vw' }}>Guichet</span>
               </div>
             ))}
+            
+            {activeCalls.length <= 1 && (
+              <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.2)', marginTop: '50px', fontSize: '1.5vw' }}>
+                Aucun historique
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
       </div>
 
-      <div style={{ position: 'absolute', bottom: 30, left: 30, opacity: 0.8, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#00b894' }}></div>
-        Temps d'attente estimé : {currentWaitTime > 0 ? `${currentWaitTime} min` : 'Calcul...'}
-      </div>
-
-      <div style={{ position: 'absolute', bottom: 30, right: 30, opacity: 0.5, fontSize: '1.2rem' }}>
-        Veuillez patienter que votre numéro soit affiché à l'écran.
-      </div>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes pulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.02); }
+          100% { transform: scale(1); }
+        }
+      `}} />
     </div>
   );
 }
