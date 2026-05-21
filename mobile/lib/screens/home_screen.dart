@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/providers/auth_provider.dart';
 import 'package:mobile/providers/queue_provider.dart';
+import 'package:mobile/widgets/glass_container.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,12 +26,9 @@ class _HomeScreenState extends State<HomeScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
+      builder: (context) => GlassContainer(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Color(0xFF13132B),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        ),
+        borderRadius: 30,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -166,31 +164,43 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              Container(
+              GlassContainer(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF13132B),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF00B894)),
-                ),
+                borderRadius: 16,
+                borderColor: const Color(0xFF00B894).withOpacity(0.5),
                 child: Column(
                   children: [
                     Text(
                       'Ticket N°${queueProvider.currentTicket!['ticketNumber']}',
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF00B894)),
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF00B894)),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Position dans la file : ${queueProvider.currentTicket!['position'] ?? '?'}',
-                      style: const TextStyle(fontSize: 18),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Position dans la file : ${queueProvider.currentTicket!['position'] ?? '?'}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    // TODO: Implement QR code generation in tickets_screen
-                    ElevatedButton(
-                      onPressed: () {
-                        // Navigate to tickets tab
-                      },
-                      child: const Text('Voir le ticket'),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // Navigate to tickets tab
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.1),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          side: const BorderSide(color: Colors.white24),
+                        ),
+                        child: const Text('Voir le QR Code'),
+                      ),
                     ),
                   ],
                 ),
@@ -214,13 +224,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
-                  child: Container(
+                  child: GlassContainer(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF13132B),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white10),
-                    ),
+                    borderRadius: 16,
                     child: Column(
                       children: [
                         Row(

@@ -5,11 +5,23 @@ import 'package:mobile/theme/app_theme.dart';
 import 'package:mobile/providers/auth_provider.dart';
 import 'package:mobile/providers/queue_provider.dart';
 import 'package:mobile/providers/wallet_provider.dart';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:mobile/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService().init();
+  
+  // Initialisation de Firebase uniquement sur mobile
+  if (!kIsWeb) {
+    try {
+      await Firebase.initializeApp();
+      await NotificationService().init();
+    } catch (e) {
+      print("Erreur Firebase: $e");
+    }
+  }
+  
   runApp(const QueuePayApp());
 }
 

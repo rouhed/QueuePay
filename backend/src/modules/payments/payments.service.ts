@@ -15,9 +15,11 @@ import {
   PaymentStatus,
   PaymentPurpose,
 } from './entities/payment.entity';
+import { Ticket } from '../tickets/entities/ticket.entity';
 import { InitiatePaymentDto, QueryPaymentsDto } from './dto';
 import { WalletService } from '../wallet/wallet.service';
 import { PaymentMethod } from '../../common/enums';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PaymentsService {
@@ -26,8 +28,11 @@ export class PaymentsService {
   constructor(
     @InjectRepository(Payment)
     private readonly paymentsRepo: Repository<Payment>,
+    @InjectRepository(Ticket)
+    private readonly ticketsRepo: Repository<Ticket>,
     private readonly httpService: HttpService,
     private readonly walletService: WalletService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ════════════════════════════════════════════════
@@ -79,10 +84,21 @@ export class PaymentsService {
 
     if (!clientId || !clientSecret) {
       this.logger.warn('[MVola] Clés non configurées — mode simulation');
+      const providerRef = `SIMULATED-${payment.reference}`;
       await this.paymentsRepo.update(payment.id, {
         status: PaymentStatus.PENDING,
-        providerReference: `SIMULATED-${payment.reference}`,
+        providerReference: providerRef,
       });
+
+      // Simulation automatique du webhook succès au bout de 3 secondes
+      setTimeout(() => {
+        this.logger.log(`[Simulation MVola] Webhook automatique déclenché pour ${providerRef}`);
+        this.handleMVolaWebhook({
+          serverCorrelationId: providerRef,
+          status: 'completed',
+        }).catch(err => this.logger.error(`Erreur simulation MVola: ${err.message}`));
+      }, 3000);
+
       return;
     }
 
@@ -176,10 +192,21 @@ export class PaymentsService {
 
     if (!clientId || !clientSecret) {
       this.logger.warn('[OrangeMoney] Clés non configurées — mode simulation');
+      const providerRef = `SIMULATED-OM-${payment.reference}`;
       await this.paymentsRepo.update(payment.id, {
         status: PaymentStatus.PENDING,
-        providerReference: `SIMULATED-OM-${payment.reference}`,
+        providerReference: providerRef,
       });
+
+      // Simulation automatique du webhook succès au bout de 3 secondes
+      setTimeout(() => {
+        this.logger.log(`[Simulation OM] Webhook automatique déclenché pour ${payment.reference}`);
+        this.handleOrangeMoneyWebhook({
+          orderid: payment.reference,
+          status: '00000',
+        }).catch(err => this.logger.error(`Erreur simulation OM: ${err.message}`));
+      }, 3000);
+
       return;
     }
 
@@ -326,7 +353,49 @@ export class PaymentsService {
 
     if (payment.purpose === PaymentPurpose.TICKET_PURCHASE && payment.ticketId) {
       this.logger.log(`[Payment] Ticket ${payment.ticketId} marqué payé.`);
-      // TODO: marquer le ticket comme payé dans TicketsService
+      try {
+        await this.ticketsRepo.update(payment.ticketId, {
+          isPaid: true,
+          paymentReference: payment.reference,
+        });
+        this.logger.log(`[Payment] Ticket ${payment.ticketId} marqué payé avec succès.`);
+
+        // Charger le ticket pour avoir les infos client et envoyer les notifications
+        const ticket = await this.ticketsRepo.findOne({
+          where: { id: payment.ticketId },
+          relations: ['client', 'queue', 'queue.entity'],
+        });
+
+        if (ticket) {
+          const method = payment.provider === PaymentProvider.MVOLA ? 'MVola' : 'Orange Money';
+          
+          if (ticket.client?.phone || ticket.clientPhone) {
+            const phone = ticket.client?.phone || ticket.clientPhone;
+            await this.notificationsService.sendSms(
+              phone!,
+              `QueuePay: Paiement confirmé (${payment.amount} Ar via ${method}). Votre ticket ${ticket.ticketNumber} est validé pour ${ticket.queue?.name}.`
+            );
+          }
+          
+          if (ticket.client?.email) {
+            await this.notificationsService.sendEmail(
+              ticket.client.email,
+              `Confirmation Ticket QueuePay - ${ticket.ticketNumber}`,
+              `<p>Bonjour,</p><p>Votre paiement de <b>${payment.amount} Ar</b> via ${method} a été confirmé.</p><p>Ticket : <b>${ticket.ticketNumber}</b><br/>File d'attente : <b>${ticket.queue?.name}</b></p><p>Merci d'utiliser QueuePay.</p>`
+            );
+          }
+
+          if (ticket.client?.fcmToken) {
+            await this.notificationsService.sendPushNotification(
+              ticket.client.fcmToken,
+              'Paiement confirmé',
+              `Votre ticket ${ticket.ticketNumber} a bien été payé.`
+            );
+          }
+        }
+      } catch (err: any) {
+        this.logger.error(`[Payment] Erreur marquage payé ticket ${payment.ticketId}: ${err.message}`);
+      }
     }
   }
 

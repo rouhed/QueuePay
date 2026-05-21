@@ -28,6 +28,17 @@ export class TicketsController {
     return this.ticketsService.create(dto);
   }
 
+  // ── Réserver un ticket (client connecté) ──────
+  @Post('reserve')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Réserver un ticket pour le client connecté' })
+  reserve(@Body() dto: CreateTicketDto, @Request() req: any) {
+    // Assigner l'utilisateur connecté comme client du ticket
+    dto.clientId = req.user.id;
+    return this.ticketsService.create(dto);
+  }
+
   // ── Lister tous les tickets (paginé) ──────────
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -88,13 +99,22 @@ export class TicketsController {
     return this.ticketsService.findOne(id);
   }
 
+  // ── Ticket Actif du client connecté ───────────
+  @Get('current')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Récupérer le ticket actif du client connecté' })
+  findCurrentActive(@Request() req: any) {
+    return this.ticketsService.findCurrentActive(req.user.id);
+  }
+
   // ── Appeler le prochain client ────────────────
   @Post('call-next/:queueId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Appeler le prochain client dans la file' })
   callNext(@Param('queueId') queueId: string, @Request() req: any) {
-    return this.ticketsService.callNext(queueId, req.user.sub);
+    return this.ticketsService.callNext(queueId, req.user.id);
   }
 
   // ── Valider un ticket (agent) ─────────────────
@@ -107,7 +127,7 @@ export class TicketsController {
     @Body() dto: ValidateTicketDto,
     @Request() req: any,
   ) {
-    return this.ticketsService.validate(id, dto, req.user.sub);
+    return this.ticketsService.validate(id, dto, req.user.id);
   }
 
   // ── Annuler un ticket (client) ────────────────

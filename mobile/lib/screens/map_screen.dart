@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import '../providers/queue_provider.dart';
 
 class MapScreen extends StatefulWidget {
@@ -15,6 +16,8 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   dynamic _selectedEntity;
   String _searchQuery = '';
+  
+  LatLng? _userLocation;
 
   // Centre par défaut: Antananarivo, Madagascar
   final LatLng _defaultCenter = const LatLng(-18.8792, 47.5079);
@@ -24,7 +27,31 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<QueueProvider>(context, listen: false).fetchEntities();
+      _getCurrentLocation();
     });
+  }
+
+  Future<void> _getCurrentLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    if (permission == LocationPermission.deniedForever) return;
+
+    Position position = await Geolocator.getCurrentPosition();
+    setState(() {
+      _userLocation = LatLng(position.latitude, position.longitude);
+    });
+    
+    _mapController.move(_userLocation!, 14.0);
   }
 
   List<Marker> _buildMarkers(List<dynamic> entities) {
@@ -109,7 +136,7 @@ class _MapScreenState extends State<MapScreen> {
                 FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: _defaultCenter,
+                    initialCenter: _userLocation ?? _defaultCenter,
                     initialZoom: 13.0,
                     onTap: (_, __) {
                       setState(() => _selectedEntity = null);
@@ -121,7 +148,20 @@ class _MapScreenState extends State<MapScreen> {
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.queuepay.mobile',
                     ),
-                    MarkerLayer(markers: _buildMarkers(entities)),
+                    MarkerLayer(markers: [
+                      ..._buildMarkers(entities),
+                      if (_userLocation != null)
+                        Marker(
+                          point: _userLocation!,
+                          width: 40,
+                          height: 40,
+                          child: const Icon(
+                            Icons.my_location,
+                            color: Colors.blueAccent,
+                            size: 30,
+                          ),
+                        ),
+                    ]),
                   ],
                 ),
 
@@ -284,7 +324,12 @@ class _MapScreenState extends State<MapScreen> {
                   child: FloatingActionButton.small(
                     backgroundColor: const Color(0xFF1E1E2D),
                     onPressed: () {
-                      _mapController.move(_defaultCenter, 13.0);
+                      if (_userLocation != null) {
+                        _mapController.move(_userLocation!, 14.0);
+                      } else {
+                        _mapController.move(_defaultCenter, 13.0);
+                        _getCurrentLocation(); // Réessayer de trouver la position
+                      }
                     },
                     child: const Icon(Icons.my_location, color: Color(0xFF6C5CE7)),
                   ),

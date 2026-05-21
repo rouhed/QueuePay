@@ -460,6 +460,21 @@ export class TicketsService {
     });
   }
 
+  // ── Trouver le ticket actif actuel du client ──
+  async findCurrentActive(userId: string): Promise<Ticket | null> {
+    const ticket = await this.ticketsRepo.findOne({
+      where: [
+        { clientId: userId, status: TicketStatus.PENDING },
+        { clientId: userId, status: TicketStatus.IN_QUEUE },
+        { clientId: userId, status: TicketStatus.CALLED },
+        { clientId: userId, status: TicketStatus.SERVING },
+      ],
+      order: { createdAt: 'DESC' },
+      relations: ['queue', 'entity', 'agent'],
+    });
+    return ticket;
+  }
+
   // ── Comptage total ────────────────────────────
   async countTotal(): Promise<number> {
     return this.ticketsRepo.count();

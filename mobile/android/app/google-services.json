@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "920682453677",
+    "project_id": "queuepay-729f2",
+    "storage_bucket": "queuepay-729f2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:920682453677:android:e9af76d1e2668d2320c424",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBd8_VSe-DShA70hrD20coaEaoRgTGsoN8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

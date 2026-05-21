@@ -1,0 +1,50 @@
+services:
+  # ════════════════════════════════════════════════
+  # 🚀 QueuePay — Backend NestJS
+  # ════════════════════════════════════════════════
+  - type: web
+    name: queuepay-api
+    runtime: node
+    region: frankfurt   # Le plus proche de Madagascar
+    plan: free          # Gratuit pour commencer — changer en "starter" pour la production
+
+    # Dossier du backend dans le repo
+    rootDir: backend
+
+    # Commande pour installer les dépendances et construire
+    buildCommand: npm install && npm run build
+
+    # Commande pour lancer le serveur
+    startCommand: node dist/main
+
+    # Variables d'environnement (à configurer manuellement dans le dashboard Render)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_PORT
+        value: "3001"
+      - key: APP_NAME
+        value: QueuePay
+
+      # Ces variables DOIVENT être définies manuellement dans le Dashboard Render :
+      # APP_URL (sera l'URL de votre service Render, ex: https://queuepay-api.onrender.com)
+      # ADMIN_URL (l'URL de votre frontend admin)
+      # DATABASE_URL (Neon PostgreSQL)
+      # REDIS_URL (Upstash Redis)
+      # JWT_SECRET
+      # JWT_REFRESH_SECRET
+      # MVOLA_CLIENT_ID
+      # MVOLA_CLIENT_SECRET
+      # MVOLA_MERCHANT_NUMBER
+      # OM_CLIENT_ID
+      # OM_CLIENT_SECRET
+      # OM_MERCHANT_KEY
+      # FIREBASE_PROJECT_ID
+      # FIREBASE_CLIENT_EMAIL
+      # FIREBASE_PRIVATE_KEY
+      # AT_API_KEY
+      # AT_USERNAME
+      # SMTP_HOST
+      # SMTP_PORT
+      # SMTP_USER
+      # SMTP_PASS

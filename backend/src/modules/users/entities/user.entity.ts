@@ -59,6 +59,9 @@ export class User {
   @Column({ name: 'refresh_token', type: 'varchar', nullable: true, length: 500 })
   refreshToken!: string | null;
 
+  @Column({ name: 'fcm_token', type: 'varchar', nullable: true, length: 255 })
+  fcmToken!: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
