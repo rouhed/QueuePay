@@ -3,10 +3,10 @@ require('dotenv').config();
 
 // Create transporter using environment variables or a fallback Ethereal test account
 async function getTransporter() {
-  const host = process.env.SMTP_HOST;
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = process.env.SMTP_PORT || 587;
-  const user = process.env.SMTP_USER;
-  let pass = process.env.SMTP_PASS;
+  const user = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
+  let pass = process.env.SMTP_PASS || 'wedpsimbcucamnww';
 
   if (pass) {
     // Strip spaces if present in Gmail App Password
