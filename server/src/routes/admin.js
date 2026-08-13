@@ -83,6 +83,30 @@ router.post('/entities', async (req, res) => {
   }
 });
 
+// RESEND ONBOARDING INVITATION EMAIL TO ENTITY
+router.post('/entities/:id/resend-invite', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const entityRes = await db.query('SELECT * FROM entities WHERE id = $1', [id]);
+    if (entityRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Entity not found' });
+    }
+    const entity = entityRes.rows[0];
+    const onboardingUrl = `/entrp/${entity.slug}`;
+    const targetEmail = entity.email || process.env.SUPER_ADMIN_EMAIL || process.env.SMTP_USER;
+    
+    await emailService.sendEntityOnboardingInviteEmail(targetEmail, entity.name, onboardingUrl);
+
+    return res.json({
+      message: `Email d'invitation envoyé avec succès à ${targetEmail} !`,
+      onboardingUrl
+    });
+  } catch (err) {
+    console.error('Resend invite error:', err);
+    return res.status(500).json({ error: 'Failed to send invitation email' });
+  }
+});
+
 // 2. LIST ALL ENTITIES (Collaborators)
 router.get('/entities', async (req, res) => {
   try {

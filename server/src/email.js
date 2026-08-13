@@ -157,7 +157,8 @@ function sendWelcomeEntityEmail(to, entityName) {
 }
 
 function sendEntityOnboardingInviteEmail(to, entityName, onboardingUrl) {
-  const fullUrl = process.env.WEB_APP_URL ? `${process.env.WEB_APP_URL}${onboardingUrl}` : `http://localhost:5173${onboardingUrl}`;
+  const webBase = process.env.WEB_APP_URL || 'https://queuepay-web.onrender.com';
+  const fullUrl = onboardingUrl.startsWith('http') ? onboardingUrl : `${webBase}${onboardingUrl}`;
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
       <h2 style="color: #F97316; text-align: center;">Invitation Partenaire QueuePay 🏢</h2>

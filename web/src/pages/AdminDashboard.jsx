@@ -732,8 +732,31 @@ export default function AdminDashboard({ user, handleLogout }) {
                         </div>
                       </div>
 
-                      {/* Reset Access Button */}
-                      <div style={{ borderTop: '1px solid rgba(234,216,195,0.3)', paddingTop: '20px', marginTop: '10px' }}>
+                      {/* Reset Access & Resend Email Buttons */}
+                      <div style={{ borderTop: '1px solid rgba(234,216,195,0.3)', paddingTop: '20px', marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <button 
+                          type="button"
+                          className="btn-secondary"
+                          style={{ 
+                            width: '100%', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            gap: '8px', 
+                            padding: '12px',
+                            background: 'rgba(6, 182, 212, 0.08)',
+                            borderColor: 'rgba(6, 182, 212, 0.3)',
+                            color: '#0284C7',
+                            fontWeight: '700',
+                            fontSize: '13px',
+                            borderRadius: '10px'
+                          }}
+                          onClick={() => handleResendInvite(selectedEntity.id)}
+                        >
+                          <Mail size={15} />
+                          Envoyer l'Email d'invitation à l'entreprise
+                        </button>
+
                         <button 
                           type="button"
                           className="btn-secondary"
