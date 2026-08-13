@@ -19,6 +19,7 @@ function generateOTP() {
 // Setup / Ensure Super Admin account
 router.get('/setup-admin', async (req, res) => {
   try {
+    await db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE');
     const hashedPass = await bcrypt.hash('admin123', 10);
     await db.query(
       `INSERT INTO users (name, email, password_hash, role, phone_number, is_email_verified) 

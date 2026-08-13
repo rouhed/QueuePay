@@ -28,6 +28,9 @@ async function initDb() {
       const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
       await pool.query(schemaSql);
       console.log('✅ All Database Tables & Relations created successfully!');
+    } else {
+      // Ensure column is_email_verified exists if schema was created earlier
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE');
     }
 
     // Always ensure Super Admin account exists with correct credentials
