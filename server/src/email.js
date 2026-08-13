@@ -1,10 +1,14 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 require('dotenv').config();
 
-// Create transporter using environment variables or a fallback Ethereal test account
+// Force Node.js to prefer IPv4 over IPv6 (fixes ENETUNREACH / ETIMEDOUT on Render Cloud)
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
+// Create transporter using environment variables or fallback credentials
 async function getTransporter() {
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = process.env.SMTP_PORT || 587;
   const user = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
   let pass = process.env.SMTP_PASS || 'wedpsimbcucamnww';
 
@@ -13,40 +17,21 @@ async function getTransporter() {
     pass = pass.replace(/\s+/g, '');
   }
 
-  if (user && pass) {
-    // Use service: 'gmail' for robust Gmail App Password transport on Cloud & Local
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user, pass },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-  }
-
-  // Fallback/test account (Ethereal Email)
-  console.log('ℹ️ Using Ethereal fallback email configuration...');
-  if (!global.etherealAccount) {
-    try {
-      global.etherealAccount = await nodemailer.createTestAccount();
-    } catch (err) {
-      console.error('Failed to create Ethereal test account:', err);
-      return null;
+  // Force IPv4 STARTTLS transport for Gmail on Cloud Servers (Render)
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // STARTTLS over 587
+    requireTLS: true,
+    auth: { user, pass },
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 20000,
+    tls: {
+      rejectUnauthorized: false,
+      ciphers: 'SSLv3'
     }
-  }
-  
-  if (global.etherealAccount) {
-    return nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: {
-        user: global.etherealAccount.user,
-        pass: global.etherealAccount.pass
-      }
-    });
-  }
-  return null;
+  });
 }
 
 const QUEUEPAY_HEADER_LOGO = `
@@ -105,12 +90,6 @@ async function sendEmail({ to, subject, html, text }) {
     });
 
     console.log(`✉️ Email sent successfully to ${recipient}. Message ID: ${info.messageId} | Response: ${info.response}`);
-    
-    const previewUrl = nodemailer.getTestMessageUrl(info);
-    if (previewUrl) {
-      console.log(`🔗 Preview Sent Email: ${previewUrl}`);
-    }
-
     return true;
   } catch (err) {
     console.error('❌ Send email error:', err);
