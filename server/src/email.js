@@ -7,14 +7,22 @@ if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-// Force IPv4 lookup for cloud servers (Render free plan disables IPv6)
-function customIPv4Lookup(hostname, options, callback) {
-  const cb = typeof options === 'function' ? options : callback;
-  return dns.lookup(hostname, { family: 4 }, cb);
+// Dynamically resolve hostname to explicit IPv4 IP string to prevent IPv6 ENETUNREACH on Render
+function resolveIPv4Host(hostname) {
+  return new Promise((resolve) => {
+    dns.resolve4(hostname, (err, addresses) => {
+      if (!err && addresses && addresses.length > 0) {
+        resolve(addresses[0]);
+      } else {
+        resolve(hostname);
+      }
+    });
+  });
 }
 
 // Create transporter using environment variables or fallback credentials
 async function getTransporter() {
+  const targetHost = process.env.SMTP_HOST || 'smtp.gmail.com';
   const user = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
   let pass = process.env.SMTP_PASS || 'wedpsimbcucamnww';
 
@@ -23,20 +31,23 @@ async function getTransporter() {
     pass = pass.replace(/\s+/g, '');
   }
 
+  // Resolve host to explicit IPv4 IP string
+  const ipv4Host = await resolveIPv4Host(targetHost);
+  console.log(`📡 Resolved SMTP IPv4 host: ${ipv4Host} (Original: ${targetHost})`);
+
   // Force IPv4 STARTTLS transport for Gmail on Cloud Servers (Render)
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
+    host: ipv4Host,
     port: 587,
     secure: false, // STARTTLS over 587
     requireTLS: true,
     auth: { user, pass },
-    lookup: customIPv4Lookup,
-    family: 4,
     connectionTimeout: 20000,
     greetingTimeout: 20000,
     socketTimeout: 20000,
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
+      servername: targetHost
     }
   });
 }
