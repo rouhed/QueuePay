@@ -62,7 +62,7 @@ router.post('/entities', async (req, res) => {
 
     // Send real invitation/welcome email to enterprise owner email address
     const targetEmail = email || process.env.SUPER_ADMIN_EMAIL || process.env.SMTP_USER || 'admin@queuepay.mg';
-    emailService.sendEntityOnboardingInviteEmail(targetEmail, name, onboardingUrl)
+    await emailService.sendEntityOnboardingInviteEmail(targetEmail, name, onboardingUrl)
       .catch(err => console.error('Error sending entity onboarding invite email:', err));
 
     // Notify all WebSocket clients (mobile & web) that a new entity was created
