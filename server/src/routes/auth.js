@@ -16,6 +16,22 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Setup / Ensure Super Admin account
+router.get('/setup-admin', async (req, res) => {
+  try {
+    const hashedPass = await bcrypt.hash('admin123', 10);
+    await db.query(
+      `INSERT INTO users (name, email, password_hash, role, phone_number, is_email_verified) 
+       VALUES ('Super Admin', 'admin@queuepay.com', $1, 'ADMIN', '0340000000', TRUE)
+       ON CONFLICT (email) DO UPDATE SET password_hash = $1, role = 'ADMIN'`,
+      [hashedPass]
+    );
+    res.json({ success: true, message: 'Super Admin admin@queuepay.com initialized successfully!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 1. REGISTER CLIENT (Initiate - Send OTP)
 router.post('/register', async (req, res) => {
   const { name, email, password, phone_number } = req.body;
