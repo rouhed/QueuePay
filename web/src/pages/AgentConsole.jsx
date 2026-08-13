@@ -30,7 +30,7 @@ import {
 import QueuePayLogo from '../components/QueuePayLogo';
 import { triggerNotification } from '../components/DynamicIslandNotification';
 
-const API_BASE_URL = 'http://127.0.0.1:5000';
+import { API_BASE_URL } from '../config/api';
 
 export default function AgentConsole({ user, handleLogout }) {
   const [boundDesk, setBoundDesk] = useState(null);

@@ -28,7 +28,7 @@ import {
 import { triggerNotification } from '../components/DynamicIslandNotification';
 import QueuePayLogo from '../components/QueuePayLogo';
 
-const API_BASE_URL = 'http://127.0.0.1:5000';
+import { API_BASE_URL } from '../config/api';
 
 export default function AdminDashboard({ user, handleLogout }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'partners', 'new-partner', 'stats'
