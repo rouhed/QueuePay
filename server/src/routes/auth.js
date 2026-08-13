@@ -23,7 +23,7 @@ router.get('/setup-admin', async (req, res) => {
     const hashedPass = await bcrypt.hash('admin123', 10);
     await db.query(
       `INSERT INTO users (name, email, password_hash, role, phone_number, is_email_verified) 
-       VALUES ('Super Admin', 'admin@queuepay.com', $1, 'ADMIN', '0340000000', TRUE)
+       VALUES ('Super Admin', 'admin@queuepay.com', $1, 'ADMIN', '0373120978', TRUE)
        ON CONFLICT (email) DO UPDATE SET password_hash = $1, role = 'ADMIN'`,
       [hashedPass]
     );
@@ -76,8 +76,8 @@ router.post('/register', async (req, res) => {
     console.log('Valid for 5 minutes.');
     console.log('====================================\n');
 
-    return res.json({ 
-      message: 'OTP sent successfully (check email or backend console)', 
+    return res.json({
+      message: 'OTP sent successfully (check email or backend console)',
       email // return email so frontend knows where to verify
     });
 
@@ -192,11 +192,11 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
+      {
+        id: user.id,
+        email: user.email,
         role: user.role,
-        entityId: user.entity_id 
+        entityId: user.entity_id
       },
       JWT_SECRET,
       { expiresIn: '30d' }
