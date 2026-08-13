@@ -13,36 +13,38 @@ async function getTransporter() {
     pass = pass.replace(/\s+/g, '');
   }
 
-  if (host && user && pass) {
+  if (user && pass) {
+    // Use service: 'gmail' for robust Gmail App Password transport on Cloud & Local
     return nodemailer.createTransport({
-      host,
-      port: parseInt(port),
-      secure: port == 465, // true for 465, false for other ports
-      auth: { user, pass }
-    });
-  } else {
-    // Fallback/test account (Ethereal Email)
-    console.log('ℹ️ Using Ethereal fallback email configuration...');
-    if (!global.etherealAccount) {
-      try {
-        global.etherealAccount = await nodemailer.createTestAccount();
-      } catch (err) {
-        console.error('Failed to create Ethereal test account:', err);
-        return null;
+      service: 'gmail',
+      auth: { user, pass },
+      tls: {
+        rejectUnauthorized: false
       }
+    });
+  }
+
+  // Fallback/test account (Ethereal Email)
+  console.log('ℹ️ Using Ethereal fallback email configuration...');
+  if (!global.etherealAccount) {
+    try {
+      global.etherealAccount = await nodemailer.createTestAccount();
+    } catch (err) {
+      console.error('Failed to create Ethereal test account:', err);
+      return null;
     }
-    
-    if (global.etherealAccount) {
-      return nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: global.etherealAccount.user,
-          pass: global.etherealAccount.pass
-        }
-      });
-    }
+  }
+  
+  if (global.etherealAccount) {
+    return nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: global.etherealAccount.user,
+        pass: global.etherealAccount.pass
+      }
+    });
   }
   return null;
 }
@@ -102,21 +104,20 @@ async function sendEmail({ to, subject, html, text }) {
       }
     });
 
-    console.log(`✉️ Email sent successfully to ${recipient}. Message ID: ${info.messageId}`);
+    console.log(`✉️ Email sent successfully to ${recipient}. Message ID: ${info.messageId} | Response: ${info.response}`);
     
-    // If Ethereal was used, log the test inbox preview URL
     const previewUrl = nodemailer.getTestMessageUrl(info);
     if (previewUrl) {
       console.log(`🔗 Preview Sent Email: ${previewUrl}`);
     }
+
     return true;
-  } catch (error) {
-    console.error('❌ Failed to send email:', error);
+  } catch (err) {
+    console.error('❌ Send email error:', err);
     return false;
   }
 }
 
-// ----------------------------------------------------
 // EMAIL TEMPLATES
 // ----------------------------------------------------
 
@@ -179,316 +180,106 @@ function sendEntityOnboardingInviteEmail(to, entityName, onboardingUrl) {
   return sendEmail({ to, subject: `Invitation à configurer l'espace ${entityName} - QueuePay`, html });
 }
 
-function sendForgotPasswordEmail(to, otp) {
+function sendRegistrationOTPEmail(to, name, otp) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
+      <h2 style="color: #EA580C; text-align: center;">Code de vérification QueuePay</h2>
+      <p>Bonjour <strong>${name}</strong>,</p>
+      <p>Voici votre code de vérification pour valider la création de votre compte client QueuePay :</p>
+      <div style="text-align: center; margin: 25px 0;">
+        <span style="font-size: 32px; font-weight: 900; color: #EA580C; letter-spacing: 6px; background: #FFF7ED; padding: 12px 24px; border-radius: 12px; border: 2px dashed #FFD8A8;">${otp}</span>
+      </div>
+      <p style="font-size: 12px; color: #78716C; text-align: center;">Ce code est valide pendant 5 minutes. Ne le partagez avec personne.</p>
+    </div>
+  `;
+  return sendEmail({ to, subject: `Code de vérification QueuePay: ${otp}`, html });
+}
+
+function sendTicketConfirmationEmail(to, ticketData) {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
-      <h2 style="color: #F97316; text-align: center;">Réinitialisation de votre mot de passe</h2>
-      <p>Bonjour,</p>
-      <p>Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte client QueuePay.</p>
-      <p>Voici votre code de validation à usage unique (OTP) :</p>
-      <div style="background-color: #FAF6F0; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0; border: 1px solid #EAD8C3;">
-        <span style="font-size: 28px; font-weight: 800; color: #F97316; letter-spacing: 5px;">${otp}</span>
+      <h2 style="color: #F97316; text-align: center;">Confirmation de votre Ticket QueuePay 🎟️</h2>
+      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
+      <p>Votre réservation de ticket auprès de <strong>${ticketData.entity_name}</strong> a été enregistrée avec succès.</p>
+      
+      <div style="background-color: #FFF7ED; border: 1.5px solid #FFD8A8; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
+        <span style="font-size: 12px; color: #9A3412; font-weight: bold; text-transform: uppercase;">Numéro de Ticket</span>
+        <h1 style="font-size: 42px; color: #EA580C; margin: 5px 0; font-weight: 900;">N° ${ticketData.ticket_number}</h1>
+        <p style="margin: 5px 0; font-weight: bold; color: #1F2937;">${ticketData.service_name}</p>
+        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Plage horaire estimée : <strong>${ticketData.time_slot}</strong></p>
+        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Tarif réservé : <strong>${ticketData.price} Ar</strong></p>
       </div>
-      <p style="color: #EF4444; font-size: 13px;"><strong>Important :</strong> Ce code est valide pendant 5 minutes. Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.</p>
+
+      <p>Veuillez vous présenter à l'établissement quelques minutes avant votre plage horaire. Suivez l'avancement de votre file en direct sur votre application mobile QueuePay.</p>
       <p style="margin-top: 20px;">L'équipe QueuePay.</p>
-      <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;" />
-      <p style="font-size: 11px; color: #78716C; text-align: center;">QueuePay Security Team.</p>
     </div>
   `;
-  return sendEmail({ 
-    to, 
-    subject: `[QueuePay] Code de réinitialisation : ${otp}`, 
-    html,
-    text: `Votre code de réinitialisation QueuePay est : ${otp}`
-  });
+  return sendEmail({ to, subject: `Ticket N°${ticketData.ticket_number} confirmé - ${ticketData.entity_name}`, html });
 }
 
-function sendForgotPasswordAdminAlertEmail(to, clientName, clientEmail) {
+function sendTicketCalledEmail(to, ticketData) {
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
-      <h2 style="color: #EF4444; text-align: center;">Alerte Super Admin : Demande de réinitialisation de mot de passe ⚠️</h2>
-      <p>Bonjour Super Administrateur,</p>
-      <p>Un utilisateur a demandé la réinitialisation de son mot de passe ou a signalé une difficulté d'accès.</p>
-      <div style="background-color: #FAF6F0; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #EAD8C3;">
-        <p style="margin: 5px 0;"><strong>Nom du client :</strong> ${clientName}</p>
-        <p style="margin: 5px 0;"><strong>Email du client :</strong> ${clientEmail}</p>
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #10B981; border-radius: 12px; background-color: #ECFDF5;">
+      <h2 style="color: #059669; text-align: center;">🟢 C'EST VOTRE TOUR AU GUICHET !</h2>
+      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
+      <p>Votre ticket <strong>N° ${ticketData.ticket_number}</strong> vient d'être appelé !</p>
+      
+      <div style="background-color: #FFFFFF; border: 2px solid #10B981; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
+        <span style="font-size: 13px; color: #065F46; font-weight: bold;">VEUILLEZ VOUS PRÉSENTER IMMÉDIATEMENT AU :</span>
+        <h1 style="font-size: 38px; color: #047857; margin: 10px 0; font-weight: 900;">${ticketData.desk_name || 'Guichet'}</h1>
+        <p style="margin: 5px 0; font-weight: bold; color: #1F2937; font-size: 18px;">${ticketData.entity_name}</p>
+        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Service : ${ticketData.service_name}</p>
       </div>
-      <p>Cette alerte est envoyée pour des raisons de conformité et de suivi de la sécurité.</p>
-      <p style="margin-top: 20px;">Système de notifications QueuePay.</p>
+
+      <p style="color: #065F46; font-weight: bold; text-align: center;">L'agent guichetier vous attend pour traiter votre demande.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `[Alerte Sécurité] Mot de passe oublié pour ${clientEmail}`, html });
+  return sendEmail({ to, subject: `🟢 C'est votre tour ! Ticket N°${ticketData.ticket_number} - ${ticketData.entity_name}`, html });
 }
 
-function sendCompanyResetPasswordEmail(to, entityName, tempPassword, slug, logoUrl = null) {
-  const loginUrl = `http://localhost:5173/entrp/${slug}`; // Direct URL to company's login page
-  
-  // Base64 images fail in most email clients, so use CSS initials for local base64 logos
-  const isBase64 = logoUrl && logoUrl.startsWith('data:image');
-  const logoHtml = (logoUrl && !isBase64)
-    ? `<img src="${logoUrl}" height="60" style="margin-bottom: 10px; border-radius: 8px;" alt="Logo" />`
-    : `<div style="display: inline-block; width: 56px; height: 56px; line-height: 56px; border-radius: 28px; background: linear-gradient(135deg, #0D9488, #0F766E); color: #FFFFFF; font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(13, 148, 136, 0.2);">${entityName.charAt(0).toUpperCase()}</div>`;
-
+function sendTicketCompletedEmail(to, ticketData) {
   const html = `
-    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #EAD8C3; border-radius: 16px; background-color: #FFFDFB; color: #292524;">
-      <div style="text-align: center; margin-bottom: 24px; border-bottom: 1px solid #FAF6F0; padding-bottom: 16px;">
-        <div style="display: inline-block; vertical-align: middle; margin-right: 15px;">
-          ${logoHtml}
-        </div>
-        <div style="display: inline-block; vertical-align: middle; font-size: 20px; font-weight: 900; color: #F97316;">
-          Queue<span style="color:#292524">Pay</span>
-        </div>
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #3B82F6; border-radius: 12px; background-color: #EFF6FF;">
+      <h2 style="color: #2563EB; text-align: center;">🎉 Service Terminé - Merci de votre visite !</h2>
+      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
+      <p>Votre passage au guichet pour le ticket <strong>N° ${ticketData.ticket_number}</strong> auprès de <strong>${ticketData.entity_name}</strong> est maintenant terminé.</p>
+      
+      <div style="background-color: #FFFFFF; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 16px; margin: 20px 0; text-align: center;">
+        <p style="margin: 5px 0; font-weight: bold; color: #1E40AF;">Service : ${ticketData.service_name}</p>
+        <p style="margin: 5px 0; color: #3B82F6; font-size: 13px;">Statut : Terminé avec succès</p>
       </div>
-      
-      <h2 style="color: #06B6D4; text-align: center; font-size: 22px; margin-top: 0;">Réinitialisation de votre accès Espace Pro</h2>
-      <p>Bonjour l'administrateur de <strong>${entityName}</strong>,</p>
-      <p>À votre demande, le Super Administrateur a réinitialisé le mot de passe de votre compte.</p>
-      
-      <p>Vos informations d'identification ont été conservées. Vous pouvez maintenant vous connecter en utilisant les identifiants temporaires suivants :</p>
-      
-      <div style="background-color: #FAF6F0; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #EAD8C3; text-align: center;">
-        <p style="margin: 0 0 10px 0; font-size: 13px; color: #78716C;">MOT DE PASSE TEMPORAIRE :</p>
-        <span style="font-family: monospace; font-size: 24px; font-weight: 800; color: #292524; letter-spacing: 2px; background: #FFF; padding: 8px 16px; border-radius: 6px; border: 1px solid #EAD8C3;">${tempPassword}</span>
-      </div>
-      
-      <div style="text-align: center; margin: 30px 0 15px 0;">
-        <a href="${loginUrl}" style="background-color: #F97316; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 30px; font-weight: bold; display: inline-block; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);">Se connecter maintenant</a>
-      </div>
-      
-      <p style="color: #C2410C; font-size: 12px; text-align: center; font-weight: 600;">⚠️ Pour des raisons de sécurité, nous vous recommandons de modifier ce mot de passe temporaire dès votre première connexion.</p>
-      
-      <p style="margin-top: 30px; border-top: 1px solid #FAF6F0; padding-top: 15px; font-size: 13px; color: #78716C;">Cordialement,<br/>L'équipe de sécurité QueuePay.</p>
+
+      <p>Merci d'avoir utilisé QueuePay pour éviter l'attente physique. À très bientôt !</p>
+      <p style="margin-top: 20px;">L'équipe QueuePay & ${ticketData.entity_name}.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `Nouveau mot de passe pour votre Espace Pro ${entityName}`, html });
+  return sendEmail({ to, subject: `Attestation de passage - Ticket N°${ticketData.ticket_number}`, html });
 }
 
-function sendAbsentEmail(to, clientName, ticketNum, entityName, serviceName) {
+function sendPasswordResetOTPEmail(to, name, otp) {
   const html = `
-    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #FEE2E2; border-radius: 16px; background-color: #FFFDFB; color: #292524;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <div style="font-size: 40px; margin-bottom: 10px;">⏰</div>
-        <h2 style="color: #EF4444; font-size: 22px; margin: 0;">Appel manqué - Ticket N°${ticketNum}</h2>
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
+      <h2 style="color: #EF4444; text-align: center;">Réinitialisation de mot de passe QueuePay</h2>
+      <p>Bonjour <strong>${name}</strong>,</p>
+      <p>Une demande de réinitialisation de mot de passe a été émise pour votre compte QueuePay.</p>
+      <p>Voici votre code de sécurité :</p>
+      <div style="text-align: center; margin: 25px 0;">
+        <span style="font-size: 32px; font-weight: 900; color: #EF4444; letter-spacing: 6px; background: #FEF2F2; padding: 12px 24px; border-radius: 12px; border: 2px dashed #FCA5A5;">${otp}</span>
       </div>
-      
-      <p>Bonjour <strong>${clientName}</strong>,</p>
-      <p>Votre numéro <strong>${ticketNum}</strong> a été appelé au guichet pour le service <strong>${serviceName}</strong> chez <strong>${entityName}</strong>, mais vous n'étiez pas présent.</p>
-      
-      <div style="background-color: #FEF2F2; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #FCA5A5;">
-        <p style="margin: 0; font-size: 13px; color: #991B1B; font-weight: bold; line-height: 1.6;">
-          💡 Ne vous inquiétez pas ! Votre ticket n'est pas perdu. Vous pouvez vous présenter à l'accueil physique de l'établissement aujourd'hui. L'agent pourra réactiver votre ticket pour vous faire passer rapidement.
-        </p>
-      </div>
-      
-      <p style="font-size: 12px; color: #78716C; border-top: 1px solid #FAF6F0; padding-top: 15px;">Cet e-mail automatique est envoyé pour le suivi de votre file d'attente QueuePay.</p>
+      <p style="font-size: 12px; color: #78716C; text-align: center;">Ce code expire dans 10 minutes. Si vous n'avez pas demandé ce changement, vous pouvez ignorer cet email.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `⚠️ Appel manqué - QueuePay Ticket N°${ticketNum}`, html });
-}
-
-function sendApproachingEmail(to, clientName, ticketNum, entityName, serviceName, peopleAhead) {
-  const html = `
-    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #EAD8C3; border-radius: 16px; background-color: #FFFDFB; color: #292524;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <div style="font-size: 40px; margin-bottom: 10px;">🚀</div>
-        <h2 style="color: #F97316; font-size: 22px; margin: 0;">C'est presque votre tour !</h2>
-      </div>
-      
-      <p>Bonjour <strong>${clientName}</strong>,</p>
-      <p>Préparez-vous ! Il reste actuellement <strong>${peopleAhead} personnes</strong> avant votre numéro <strong>${ticketNum}</strong> chez <strong>${entityName}</strong> (Service: ${serviceName}).</p>
-      
-      <div style="background-color: #FAF6F0; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #EAD8C3; text-align: center;">
-        <p style="margin: 0; font-size: 14px; color: #C2410C; font-weight: bold;">
-          Veuillez vous approcher du guichet d'accueil.
-        </p>
-      </div>
-      
-      <p style="font-size: 12px; color: #78716C; border-top: 1px solid #FAF6F0; padding-top: 15px;">Suivez l'avancement en temps réel sur votre application mobile QueuePay.</p>
-    </div>
-  `;
-  return sendEmail({ to, subject: `🔔 C'est presque votre tour - Ticket N°${ticketNum}`, html });
-}
-
-function sendDepositReceiptEmail(to, clientName, amount, method, reference, newBalance) {
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
-      <h2 style="color: #10B981; text-align: center;">Reçu de Dépôt Réussi 💰</h2>
-      <p>Bonjour <strong>${clientName}</strong>,</p>
-      <p>Nous vous confirmons que votre portefeuille QueuePay a été rechargé avec succès.</p>
-      
-      <div style="background-color: #FAF6F0; padding: 20px; border-radius: 10px; border: 1px solid #EAD8C3; margin: 20px 0;">
-        <table style="width: 100%; border-collapse: collapse;">
-          <tr>
-            <td style="color: #78716C; padding: 6px 0;">Montant Crédité :</td>
-            <td style="font-weight: bold; text-align: right; color: #10B981;">+${amount} Ar</td>
-          </tr>
-          <tr>
-            <td style="color: #78716C; padding: 6px 0;">Moyen de Paiement :</td>
-            <td style="font-weight: bold; text-align: right;">${method}</td>
-          </tr>
-          <tr>
-            <td style="color: #78716C; padding: 6px 0;">Référence Transaction :</td>
-            <td style="font-family: monospace; text-align: right;">${reference}</td>
-          </tr>
-          <tr style="border-top: 1px solid #EAD8C3;">
-            <td style="color: #78716C; padding: 12px 0 0 0; font-weight: bold;">Nouveau Solde :</td>
-            <td style="font-weight: bold; text-align: right; color: #292524; padding-top: 12px; font-size: 18px;">${newBalance} Ar</td>
-          </tr>
-        </table>
-      </div>
-      
-      <p>Vous pouvez dès maintenant réserver un service avec votre solde disponible.</p>
-      <p>L'équipe QueuePay.</p>
-    </div>
-  `;
-  return sendEmail({ to, subject: 'Reçu de dépôt validé - QueuePay', html });
-}
-
-function sendTicketReceiptEmail(to, clientName, ticketNum, entityName, serviceName, date, slot, price, qrToken) {
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
-      <h2 style="color: #F97316; text-align: center;">Votre Ticket Réservé ! 🎫</h2>
-      <p>Bonjour <strong>${clientName}</strong>,</p>
-      <p>Merci pour votre réservation sur QueuePay. Votre ticket a été généré avec succès.</p>
-      
-      <div style="background-color: #FAF6F0; border: 2px dashed #EAD8C3; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
-        <span style="font-size: 11px; color: #78716C; font-weight: bold; letter-spacing: 1px;">NUMÉRO DE PASSAGE</span><br/>
-        <span style="font-size: 48px; font-weight: 900; color: #F97316; display: block; margin: 10px 0;">${ticketNum}</span>
-        
-        <table style="width: 100%; border-collapse: collapse; text-align: left; margin: 15px 0;">
-          <tr>
-            <td style="color: #78716C; padding: 6px 0;">Établissement :</td>
-            <td style="font-weight: bold; text-align: right;">${entityName}</td>
-          </tr>
-          <tr>
-            <td style="color: #78716C; padding: 6px 0;">Service :</td>
-            <td style="font-weight: bold; text-align: right;">${serviceName}</td>
-          </tr>
-          <tr>
-            <td style="color: #78716C; padding: 6px 0;">Date :</td>
-            <td style="font-weight: bold; text-align: right;">${date}</td>
-          </tr>
-          <tr>
-            <td style="color: #78716C; padding: 6px 0;">Créneau Horaire :</td>
-            <td style="font-weight: bold; text-align: right; color: #C2410C;">${slot}</td>
-          </tr>
-          <tr>
-            <td style="color: #78716C; padding: 6px 0;">Prix du ticket :</td>
-            <td style="font-weight: bold; text-align: right;">${price} Ar</td>
-          </tr>
-        </table>
-        
-        <hr style="border: none; border-top: 1px dashed #EAD8C3; margin: 15px 0;" />
-        <p style="font-size: 12px; color: #78716C; margin-bottom: 10px;">Scannez ce QR Code au guichet :</p>
-        <div style="margin: 15px 0;">
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrToken)}" alt="QR Code Ticket" style="width: 160px; height: 160px; border-radius: 12px; border: 4px solid #FFFDFB; box-shadow: 0 4px 10px rgba(0,0,0,0.1);" />
-        </div>
-        <div style="background-color: #292524; color: #FFFDFB; font-family: monospace; padding: 10px; border-radius: 6px; display: inline-block; font-size: 14px; font-weight: bold;">
-          ${qrToken}
-        </div>
-      </div>
-      
-      <p>Vous recevrez une alerte en temps réel sur l'application lorsqu'il ne restera plus que 3 personnes avant votre tour.</p>
-      <p>Merci pour votre confiance,<br/>L'équipe QueuePay.</p>
-    </div>
-  `;
-  return sendEmail({ to, subject: `Ticket QueuePay N°${ticketNum} chez ${entityName}`, html });
-}
-
-function sendRegistrationOTPEmail(to, clientName, otp) {
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
-      <h2 style="color: #F97316; text-align: center;">Vérification de votre compte QueuePay</h2>
-      <p>Bonjour <strong>${clientName}</strong>,</p>
-      <p>Merci de vous être inscrit sur QueuePay ! Pour valider la création de votre compte client, veuillez saisir le code de sécurité OTP ci-dessous dans l'application :</p>
-      <div style="background-color: #FAF6F0; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0; border: 1px solid #EAD8C3;">
-        <span style="font-size: 28px; font-weight: 800; color: #F97316; letter-spacing: 5px;">${otp}</span>
-      </div>
-      <p style="color: #78716C; font-size: 13px;">Ce code est valide pendant 5 minutes. Si vous n'avez pas initié cette inscription, vous pouvez simplement ignorer cet email.</p>
-      <p style="margin-top: 20px;">L'équipe QueuePay.</p>
-      <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;" />
-      <p style="font-size: 11px; color: #78716C; text-align: center;">QueuePay Madagascar.</p>
-    </div>
-  `;
-  return sendEmail({ 
-    to, 
-    subject: `[QueuePay] Code de sécurité OTP : ${otp}`, 
-    html,
-    text: `Bonjour ${clientName}, votre code de validation QueuePay est : ${otp}`
-  });
-}
-
-function sendTicketCalledEmail(to, clientName, ticketNum, entityName, serviceName, deskName) {
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
-      <div style="background-color: #10B981; padding: 14px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-        <h2 style="color: #FFFFFF; margin: 0; font-size: 22px;">🟢 C'EST VOTRE TOUR AU GUICHET !</h2>
-      </div>
-      <p>Bonjour <strong>${clientName || 'Client'}</strong>,</p>
-      <p>Votre tour d'attente est arrivé chez <strong>${entityName}</strong> pour le service <strong>${serviceName}</strong> !</p>
-      
-      <div style="background-color: #ECFDF5; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0; border: 2px solid #10B981;">
-        <span style="font-size: 13px; font-weight: bold; color: #065F46; display: block; margin-bottom: 6px; letter-spacing: 1px;">VOTRE TICKET APPELÉ</span>
-        <span style="font-size: 42px; font-weight: 900; color: #047857; letter-spacing: 2px;">N° ${ticketNum}</span>
-        <div style="margin-top: 14px; font-size: 16px; font-weight: bold; color: #065F46; background: #D1FAE5; padding: 10px; border-radius: 8px; display: inline-block;">
-          📍 Rendez-vous immédiatement au : <span style="color: #047857; font-size: 18px; text-decoration: underline;">${deskName || 'Guichet Assigné'}</span>
-        </div>
-      </div>
-
-      <p style="color: #374151; font-size: 14px; text-align: center;">Veuillez vous présenter au guichet muni(e) de votre Pass Ticket ou QR Code.</p>
-      <p style="margin-top: 24px; color: #6B7280; font-size: 13px;">Merci pour votre confiance,<br/>L'équipe QueuePay Madagascar.</p>
-    </div>
-  `;
-  return sendEmail({
-    to,
-    subject: `🟢 C'EST VOTRE TOUR ! Ticket N°${ticketNum} chez ${entityName}`,
-    html,
-    text: `Bonjour ${clientName}, c'est votre tour chez ${entityName} (${serviceName}) ! Rendez-vous au ${deskName || 'Guichet'} avec votre Ticket N°${ticketNum}.`
-  });
-}
-
-function sendTicketCompletedEmail(to, clientName, ticketNum, entityName, serviceName) {
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
-      <div style="background-color: #F97316; padding: 16px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-        <h2 style="color: #FFFFFF; margin: 0; font-size: 22px;">🎉 MERCI POUR VOTRE VISITE !</h2>
-        <p style="color: #FFFDFB; margin: 4px 0 0 0; font-size: 13px; font-weight: bold;">SERVICE TERMINÉ AVEC SUCCÈS</p>
-      </div>
-      <p>Bonjour <strong>${clientName || 'Client'}</strong>,</p>
-      <p>Votre passage au guichet pour le <strong>Ticket N°${ticketNum}</strong> chez <strong>${entityName}</strong> (${serviceName}) s'est déroulé avec succès.</p>
-      
-      <div style="background-color: #FFF7ED; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0; border: 2px solid #FFD8A8;">
-        <span style="font-size: 13px; font-weight: bold; color: #9A3412; display: block; margin-bottom: 6px; letter-spacing: 1px;">RÉCAPITULATIF PASSAGE</span>
-        <span style="font-size: 36px; font-weight: 900; color: #EA580C; letter-spacing: 2px;">TICKET N° ${ticketNum}</span>
-        <div style="margin-top: 10px; font-size: 14px; font-weight: bold; color: #1F2937;">
-          ${entityName} • ${serviceName}
-        </div>
-      </div>
-
-      <p style="color: #374151; font-size: 14px; text-align: center;">Toute l'équipe de <strong>${entityName}</strong> et <strong>QueuePay Madagascar</strong> vous remercie pour votre confiance !</p>
-      <p style="margin-top: 24px; color: #6B7280; font-size: 13px; text-align: center;">À très bientôt sur QueuePay ! 🎈</p>
-    </div>
-  `;
-  return sendEmail({
-    to,
-    subject: `🎉 Merci pour votre visite chez ${entityName} ! (Ticket N°${ticketNum})`,
-    html,
-    text: `Bonjour ${clientName}, merci pour votre visite chez ${entityName} ! Votre ticket N°${ticketNum} (${serviceName}) est bien terminé.`
-  });
+  return sendEmail({ to, subject: `Code de réinitialisation QueuePay: ${otp}`, html });
 }
 
 module.exports = {
   sendWelcomeEmail,
   sendWelcomeEntityEmail,
   sendEntityOnboardingInviteEmail,
-  sendForgotPasswordEmail,
-  sendForgotPasswordAdminAlertEmail,
-  sendCompanyResetPasswordEmail,
-  sendAbsentEmail,
-  sendApproachingEmail,
+  sendRegistrationOTPEmail,
+  sendTicketConfirmationEmail,
   sendTicketCalledEmail,
   sendTicketCompletedEmail,
-  sendDepositReceiptEmail,
-  sendTicketReceiptEmail,
-  sendRegistrationOTPEmail
+  sendPasswordResetOTPEmail,
+  sendEmail
 };
