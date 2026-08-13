@@ -1,5 +1,11 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 require('dotenv').config();
+
+// Force Node.js to prefer IPv4 over IPv6 (fixes ENETUNREACH on Render Cloud)
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const QUEUEPAY_HEADER_LOGO = `
   <div style="text-align: center; padding: 20px 0 16px 0; border-bottom: 3px solid #F97316; margin-bottom: 24px; background: linear-gradient(135deg, #292524 0%, #1C1917 100%); border-radius: 12px 12px 0 0;">
@@ -112,11 +118,12 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
     if (pass) pass = pass.replace(/\s+/g, '');
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
 
-    // Strategy 1: Dedicated Nodemailer 'gmail' Service
+    // Strategy 1: Dedicated Nodemailer 'gmail' Service (Forced IPv4)
     if (host === 'smtp.gmail.com' || host === 'gmail') {
       try {
         const gmailTransporter = nodemailer.createTransport({
           service: 'gmail',
+          family: 4, // Explicitly force IPv4 resolution to fix ENETUNREACH on Render
           auth: { user, pass },
           connectionTimeout: 15000,
           greetingTimeout: 15000,
@@ -142,12 +149,13 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
       }
     }
 
-    // Strategy 2: Attempt Port 465 (SSL Direct)
+    // Strategy 2: Attempt Port 465 (SSL Direct, Forced IPv4)
     try {
       const transporter465 = nodemailer.createTransport({
         host: host,
         port: 465,
         secure: true,
+        family: 4, // Explicitly force IPv4 resolution
         auth: { user, pass },
         connectionTimeout: 15000,
         greetingTimeout: 15000,
@@ -173,13 +181,14 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
       console.warn(`⚠️ Port 465 (SSL) indisponible (${err465.message}). Tentative sur Port 587 (TLS)...`);
     }
 
-    // Strategy 3: Attempt Port 587 (STARTTLS)
+    // Strategy 3: Attempt Port 587 (STARTTLS, Forced IPv4)
     try {
       const transporter587 = nodemailer.createTransport({
         host: host,
         port: 587,
         secure: false,
         requireTLS: true,
+        family: 4, // Explicitly force IPv4 resolution
         auth: { user, pass },
         connectionTimeout: 15000,
         greetingTimeout: 15000,
