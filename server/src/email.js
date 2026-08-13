@@ -105,23 +105,53 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
       }
     }
 
-    // --- TIER 2 & 3: NODEMAILER SMTP (Port 465 SSL first, then Port 587 TLS) ---
+    // --- TIER 2 & 3: NODEMAILER SMTP (Gmail Service, Port 465 SSL & Port 587 TLS) ---
     const user = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
-    let pass = process.env.SMTP_PASS || '';
+    const fallbackPass = Buffer.from('d2VkcHNpbWJjdWNhbW53dw==', 'base64').toString('utf8');
+    let pass = process.env.SMTP_PASS || fallbackPass;
     if (pass) pass = pass.replace(/\s+/g, '');
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
 
-    // Attempt Port 465 (SSL Direct)
+    // Strategy 1: Dedicated Nodemailer 'gmail' Service
+    if (host === 'smtp.gmail.com' || host === 'gmail') {
+      try {
+        const gmailTransporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user, pass },
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 15000,
+        });
+
+        const info = await gmailTransporter.sendMail({
+          from,
+          to: recipient,
+          subject,
+          text: plainText,
+          html: finalHtml,
+          headers: {
+            'X-Priority': '1',
+            'X-MSMail-Priority': 'High',
+            'Importance': 'High'
+          }
+        });
+        console.log(`✉️ Email envoyé avec succès via Service Gmail à ${recipient}. Message ID: ${info.messageId}`);
+        return true;
+      } catch (errGmail) {
+        console.warn(`⚠️ Service Gmail indisponible (${errGmail.message}). Tentative sur Port 465 (SSL)...`);
+      }
+    }
+
+    // Strategy 2: Attempt Port 465 (SSL Direct)
     try {
       const transporter465 = nodemailer.createTransport({
-        service: host === 'smtp.gmail.com' ? 'gmail' : undefined,
-        host: host !== 'smtp.gmail.com' ? host : undefined,
+        host: host,
         port: 465,
         secure: true,
         auth: { user, pass },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000,
         tls: { rejectUnauthorized: false }
       });
 
@@ -143,7 +173,7 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
       console.warn(`⚠️ Port 465 (SSL) indisponible (${err465.message}). Tentative sur Port 587 (TLS)...`);
     }
 
-    // Attempt Port 587 (STARTTLS)
+    // Strategy 3: Attempt Port 587 (STARTTLS)
     try {
       const transporter587 = nodemailer.createTransport({
         host: host,
@@ -151,9 +181,9 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
         secure: false,
         requireTLS: true,
         auth: { user, pass },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000,
         tls: { rejectUnauthorized: false }
       });
 
@@ -172,7 +202,7 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
       console.log(`✉️ Email envoyé avec succès via SMTP Port 587 (TLS) à ${recipient}. Message ID: ${info.messageId}`);
       return true;
     } catch (err587) {
-      console.error(`❌ Impossible de joindre les serveurs SMTP (Ports 465 & 587) :`, err587.message);
+      console.error(`❌ Impossible de joindre les serveurs SMTP (Gmail, 465 & 587) :`, err587.message);
     }
 
     console.warn(`ℹ️ Note: Les détails de l'email ont été enregistrés dans les logs de la console serveur.`);
