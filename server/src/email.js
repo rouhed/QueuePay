@@ -7,6 +7,12 @@ if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
 }
 
+// Force IPv4 lookup for cloud servers (Render free plan disables IPv6)
+function customIPv4Lookup(hostname, options, callback) {
+  const cb = typeof options === 'function' ? options : callback;
+  return dns.lookup(hostname, { family: 4 }, cb);
+}
+
 // Create transporter using environment variables or fallback credentials
 async function getTransporter() {
   const user = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
@@ -24,12 +30,13 @@ async function getTransporter() {
     secure: false, // STARTTLS over 587
     requireTLS: true,
     auth: { user, pass },
+    lookup: customIPv4Lookup,
+    family: 4,
     connectionTimeout: 20000,
     greetingTimeout: 20000,
     socketTimeout: 20000,
     tls: {
-      rejectUnauthorized: false,
-      ciphers: 'SSLv3'
+      rejectUnauthorized: false
     }
   });
 }
