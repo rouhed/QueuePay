@@ -107,7 +107,7 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
 
     // --- TIER 2 & 3: NODEMAILER SMTP (Port 465 SSL first, then Port 587 TLS) ---
     const user = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
-    let pass = process.env.SMTP_PASS || 'wedpsimbcucamnww';
+    let pass = process.env.SMTP_PASS || '';
     if (pass) pass = pass.replace(/\s+/g, '');
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
 
