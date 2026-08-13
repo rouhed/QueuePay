@@ -52,6 +52,7 @@ export default function AdminDashboard({ user, handleLogout }) {
   const [logoBase64, setLogoBase64] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [onboardLink, setOnboardLink] = useState('');
+  const [createdEntityModal, setCreatedEntityModal] = useState(null);
 
   // Edit Partner Form states
   const [editName, setEditName] = useState('');
@@ -61,6 +62,26 @@ export default function AdminDashboard({ user, handleLogout }) {
   const [editMaxPrice, setEditMaxPrice] = useState(400);
   const [editCommission, setEditCommission] = useState(100);
   const [editLogoBase64, setEditLogoBase64] = useState('');
+
+  const handleResendInvite = (entityId, entityName, entityEmail) => {
+    const token = sessionStorage.getItem('token');
+    fetch(`${API_BASE_URL}/admin/entities/${entityId}/resend-invite`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.message) {
+          triggerNotification(`Email d'invitation renvoyé à ${entityEmail || entityName} !`, 'success');
+        } else {
+          triggerNotification(data.error || 'Erreur lors de l\'envoi', 'danger');
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        triggerNotification('Erreur réseau lors du renvoi de l\'email', 'danger');
+      });
+  };
 
   const fetchDashboardData = () => {
     const token = sessionStorage.getItem('token');
@@ -256,6 +277,10 @@ export default function AdminDashboard({ user, handleLogout }) {
           triggerNotification('Partenariat entreprise créé !', 'success');
           const fullOnboardUrl = `${window.location.origin}/entrp/${data.entity.slug}`;
           setOnboardLink(fullOnboardUrl);
+          setCreatedEntityModal({
+            entity: data.entity,
+            url: fullOnboardUrl
+          });
 
           // Reset form
           setName('');
@@ -268,7 +293,6 @@ export default function AdminDashboard({ user, handleLogout }) {
           setCommission(100);
 
           fetchDashboardData();
-          setActiveTab('partners'); // Redirect to list to show it
         } else {
           triggerNotification(data.error || 'Erreur lors de la création', 'danger');
         }
@@ -605,6 +629,16 @@ export default function AdminDashboard({ user, handleLogout }) {
                           </td>
                           <td style={{ padding: '16px 12px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                              {!e.onboarding_completed && (
+                                <button
+                                  className="btn-secondary"
+                                  style={{ padding: '8px', borderRadius: '8px', background: 'rgba(249, 115, 22, 0.08)', color: 'var(--saffron)', borderColor: 'rgba(249, 115, 22, 0.2)' }}
+                                  title="Renvoyer l'email d'invitation"
+                                  onClick={() => handleResendInvite(e.id, e.name, e.email)}
+                                >
+                                  <Mail size={15} />
+                                </button>
+                              )}
                               <button
                                 className="btn-secondary"
                                 style={{ padding: '8px', borderRadius: '8px', background: '#FFF' }}
@@ -1305,6 +1339,63 @@ export default function AdminDashboard({ user, handleLogout }) {
               </button>
               <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowDeleteModal(false)}>
                 Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODAL: NEW ENTITY CREATED SUCCESS ═══ */}
+      {createdEntityModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(41,37,36,0.4)', backdropFilter: 'blur(8px)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass-panel animate-fade-in" style={{ padding: '32px', width: '90%', maxWidth: '500px', background: '#FFFDFB', textAlign: 'center', borderRadius: '20px' }}>
+            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(16,185,129,0.1)', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <CheckCircle size={36} />
+            </div>
+
+            <h3 style={{ fontSize: '22px', fontWeight: '800', marginBottom: '8px', color: 'var(--espresso)' }}>Partenariat Créé avec Succès !</h3>
+
+            <p style={{ fontSize: '13px', color: 'var(--espresso-muted)', lineHeight: '1.5', marginBottom: '20px' }}>
+              L'entité <strong>{createdEntityModal.entity.name}</strong> a été enregistrée. L'email d'invitation est envoyé à <strong>{createdEntityModal.entity.email || 'l\'adresse configurée'}</strong>.
+            </p>
+
+            <div style={{ background: '#FFF7ED', border: '1.5px dashed #FFD8A8', borderRadius: '12px', padding: '16px', marginBottom: '24px', textAlign: 'left' }}>
+              <span style={{ fontSize: '11px', fontWeight: '800', color: '#9A3412', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>
+                Lien d'activation & Configuration :
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="text"
+                  readOnly
+                  value={createdEntityModal.url}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #FFD8A8', background: '#FFF', fontSize: '13px', fontFamily: 'monospace', color: '#EA580C' }}
+                />
+                <button
+                  className="btn-primary"
+                  style={{ whiteSpace: 'nowrap', padding: '10px 14px' }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(createdEntityModal.url);
+                    triggerNotification('Lien onboarding copié !', 'success');
+                  }}
+                >
+                  <Copy size={16} /> Copier
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setCreatedEntityModal(null)}>
+                Fermer
+              </button>
+              <button
+                className="btn-primary"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  setCreatedEntityModal(null);
+                  setActiveTab('partners');
+                }}
+              >
+                Voir les Partenaires
               </button>
             </div>
           </div>

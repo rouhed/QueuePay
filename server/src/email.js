@@ -1,56 +1,5 @@
 const nodemailer = require('nodemailer');
-const dns = require('dns');
 require('dotenv').config();
-
-// Force Node.js to prefer IPv4 over IPv6 (fixes ENETUNREACH / ETIMEDOUT on Render Cloud)
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder('ipv4first');
-}
-
-// Dynamically resolve hostname to explicit IPv4 IP string to prevent IPv6 ENETUNREACH on Render
-function resolveIPv4Host(hostname) {
-  return new Promise((resolve) => {
-    dns.resolve4(hostname, (err, addresses) => {
-      if (!err && addresses && addresses.length > 0) {
-        resolve(addresses[0]);
-      } else {
-        resolve(hostname);
-      }
-    });
-  });
-}
-
-// Create transporter using environment variables or fallback credentials
-async function getTransporter() {
-  const targetHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const user = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
-  let pass = process.env.SMTP_PASS || 'wedpsimbcucamnww';
-
-  if (pass) {
-    // Strip spaces if present in Gmail App Password
-    pass = pass.replace(/\s+/g, '');
-  }
-
-  // Resolve host to explicit IPv4 IP string
-  const ipv4Host = await resolveIPv4Host(targetHost);
-  console.log(`📡 Resolved SMTP IPv4 host: ${ipv4Host} (Original: ${targetHost})`);
-
-  // Force IPv4 STARTTLS transport for Gmail on Cloud Servers (Render)
-  return nodemailer.createTransport({
-    host: ipv4Host,
-    port: 587,
-    secure: false, // STARTTLS over 587
-    requireTLS: true,
-    auth: { user, pass },
-    connectionTimeout: 20000,
-    greetingTimeout: 20000,
-    socketTimeout: 20000,
-    tls: {
-      rejectUnauthorized: false,
-      servername: targetHost
-    }
-  });
-}
 
 const QUEUEPAY_HEADER_LOGO = `
   <div style="text-align: center; padding: 20px 0 16px 0; border-bottom: 3px solid #F97316; margin-bottom: 24px; background: linear-gradient(135deg, #292524 0%, #1C1917 100%); border-radius: 12px 12px 0 0;">
@@ -71,46 +20,165 @@ const QUEUEPAY_HEADER_LOGO = `
 `;
 
 /**
- * Send an email using standard SMTP.
+ * Robust Multi-tier Email Sender
+ * Tier 1: HTTP API (Resend / Brevo) - Port 443 (Never blocked by cloud hosts)
+ * Tier 2: SMTP Port 465 (SSL direct)
+ * Tier 3: SMTP Port 587 (TLS STARTTLS)
+ * Tier 4: Clear Console Log Banner Fallback
  */
-async function sendEmail({ to, subject, html, text }) {
+async function sendEmail({ to, subject, html, text, actionUrl = null, code = null }) {
   try {
-    const transporter = await getTransporter();
-    if (!transporter) {
-      console.warn('❌ Email Transporter not configured. Email was not sent.');
-      return false;
-    }
-
     let recipient = to;
     if (!recipient || typeof recipient !== 'string' || !recipient.includes('@')) {
-      console.warn(`⚠️ Invalid target email "${to}". Using fallback address.`);
       recipient = process.env.SUPER_ADMIN_EMAIL || process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
     }
 
-    const from = process.env.SMTP_FROM || '"QueuePay Services" <rouhedmouhamed@gmail.com>';
-    
-    // Prepend QueuePay header logo if not already present
+    const fromAddress = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
+    const fromName = process.env.SMTP_FROM || 'QueuePay Services';
+    const from = `"${fromName}" <${fromAddress}>`;
+
     const finalHtml = html.includes('QUEUEPAY_HEADER') ? html : `${QUEUEPAY_HEADER_LOGO}${html}`;
     const plainText = text || html.replace(/<[^>]*>?/gm, '').trim();
 
-    const info = await transporter.sendMail({
-      from,
-      to: recipient,
-      subject,
-      text: plainText,
-      html: finalHtml,
-      headers: {
-        'X-Priority': '1',
-        'X-MSMail-Priority': 'High',
-        'Importance': 'High',
-        'Auto-Submitted': 'auto-generated'
-      }
-    });
+    // High visibility console banner for Render logs & administrative backup
+    console.log(`\n┌──────────────────────────────────────────────────────────┐`);
+    console.log(`│ 📧 ENVOI EMAIL DE NOTIFICATION QUEUEPAY                  │`);
+    console.log(`├──────────────────────────────────────────────────────────┤`);
+    console.log(`│ Destinataire : ${recipient}`);
+    console.log(`│ Sujet        : ${subject}`);
+    if (actionUrl) console.log(`│ Link/URL     : ${actionUrl}`);
+    if (code)      console.log(`│ Code OTP     : ${code}`);
+    console.log(`└──────────────────────────────────────────────────────────┘\n`);
 
-    console.log(`✉️ Email sent successfully to ${recipient}. Message ID: ${info.messageId} | Response: ${info.response}`);
-    return true;
+    // --- TIER 1: HTTP API (Resend or Brevo) ---
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM || 'QueuePay <onboarding@resend.dev>',
+            to: [recipient],
+            subject,
+            html: finalHtml,
+            text: plainText
+          })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          console.log(`✅ Email envoyé avec succès via Resend HTTP API ! ID: ${data.id}`);
+          return true;
+        }
+        console.warn(`⚠️ Resend HTTP API warning:`, data);
+      } catch (apiErr) {
+        console.warn(`⚠️ Erreur Resend API:`, apiErr.message);
+      }
+    }
+
+    if (process.env.BREVO_API_KEY) {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': process.env.BREVO_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: 'QueuePay', email: fromAddress },
+            to: [{ email: recipient }],
+            subject,
+            htmlContent: finalHtml,
+            textContent: plainText
+          })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          console.log(`✅ Email envoyé avec succès via Brevo HTTP API ! ID: ${data.messageId}`);
+          return true;
+        }
+        console.warn(`⚠️ Brevo HTTP API warning:`, data);
+      } catch (apiErr) {
+        console.warn(`⚠️ Erreur Brevo API:`, apiErr.message);
+      }
+    }
+
+    // --- TIER 2 & 3: NODEMAILER SMTP (Port 465 SSL first, then Port 587 TLS) ---
+    const user = process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
+    let pass = process.env.SMTP_PASS || 'wedpsimbcucamnww';
+    if (pass) pass = pass.replace(/\s+/g, '');
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+
+    // Attempt Port 465 (SSL Direct)
+    try {
+      const transporter465 = nodemailer.createTransport({
+        service: host === 'smtp.gmail.com' ? 'gmail' : undefined,
+        host: host !== 'smtp.gmail.com' ? host : undefined,
+        port: 465,
+        secure: true,
+        auth: { user, pass },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+        tls: { rejectUnauthorized: false }
+      });
+
+      const info = await transporter465.sendMail({
+        from,
+        to: recipient,
+        subject,
+        text: plainText,
+        html: finalHtml,
+        headers: {
+          'X-Priority': '1',
+          'X-MSMail-Priority': 'High',
+          'Importance': 'High'
+        }
+      });
+      console.log(`✉️ Email envoyé avec succès via SMTP Port 465 (SSL) à ${recipient}. Message ID: ${info.messageId}`);
+      return true;
+    } catch (err465) {
+      console.warn(`⚠️ Port 465 (SSL) indisponible (${err465.message}). Tentative sur Port 587 (TLS)...`);
+    }
+
+    // Attempt Port 587 (STARTTLS)
+    try {
+      const transporter587 = nodemailer.createTransport({
+        host: host,
+        port: 587,
+        secure: false,
+        requireTLS: true,
+        auth: { user, pass },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+        tls: { rejectUnauthorized: false }
+      });
+
+      const info = await transporter587.sendMail({
+        from,
+        to: recipient,
+        subject,
+        text: plainText,
+        html: finalHtml,
+        headers: {
+          'X-Priority': '1',
+          'X-MSMail-Priority': 'High',
+          'Importance': 'High'
+        }
+      });
+      console.log(`✉️ Email envoyé avec succès via SMTP Port 587 (TLS) à ${recipient}. Message ID: ${info.messageId}`);
+      return true;
+    } catch (err587) {
+      console.error(`❌ Impossible de joindre les serveurs SMTP (Ports 465 & 587) :`, err587.message);
+    }
+
+    console.warn(`ℹ️ Note: Les détails de l'email ont été enregistrés dans les logs de la console serveur.`);
+    return false;
   } catch (err) {
-    console.error('❌ Send email error:', err);
+    console.error('❌ Erreur globale envoi email:', err);
     return false;
   }
 }
@@ -257,7 +325,7 @@ function sendPasswordResetOTPEmail(to, name, otp) {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
       <h2 style="color: #EF4444; text-align: center;">Réinitialisation de mot de passe QueuePay</h2>
-      <p>Bonjour <strong>${name}</strong>,</p>
+      <p>Bonjour <strong>${name || 'Utilisateur'}</strong>,</p>
       <p>Une demande de réinitialisation de mot de passe a été émise pour votre compte QueuePay.</p>
       <p>Voici votre code de sécurité :</p>
       <div style="text-align: center; margin: 25px 0;">
@@ -266,7 +334,86 @@ function sendPasswordResetOTPEmail(to, name, otp) {
       <p style="font-size: 12px; color: #78716C; text-align: center;">Ce code expire dans 10 minutes. Si vous n'avez pas demandé ce changement, vous pouvez ignorer cet email.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `Code de réinitialisation QueuePay: ${otp}`, html });
+  return sendEmail({ to, subject: `Code de réinitialisation QueuePay: ${otp}`, html, code: otp });
+}
+
+function sendForgotPasswordEmail(to, otp) {
+  return sendPasswordResetOTPEmail(to, 'Client', otp);
+}
+
+function sendForgotPasswordAdminAlertEmail(to, clientName, clientEmail) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
+      <h2 style="color: #EF4444; text-align: center;">Alerte Sécurité : Demande de réinitialisation</h2>
+      <p>Bonjour Super Admin,</p>
+      <p>L'utilisateur <strong>${clientName || 'Client'}</strong> (${clientEmail}) a demandé la réinitialisation de son mot de passe QueuePay.</p>
+      <p>Un code de vérification à 6 chiffres a été généré et envoyé à son adresse.</p>
+      <p style="margin-top: 20px;">Système de Sécurité QueuePay.</p>
+    </div>
+  `;
+  return sendEmail({ to, subject: `Alerte Réinitialisation Mot de Passe - ${clientEmail}`, html });
+}
+
+function sendTicketReceiptEmail(to, ticketData) {
+  return sendTicketConfirmationEmail(to, ticketData);
+}
+
+function sendDepositReceiptEmail(to, clientName, amount, method, refNum, newBalance) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #10B981; border-radius: 12px; background-color: #ECFDF5;">
+      <h2 style="color: #059669; text-align: center;">💳 Reçu de Dépôt QueuePay</h2>
+      <p>Bonjour <strong>${clientName || 'Client'}</strong>,</p>
+      <p>Votre compte QueuePay a été crédité avec succès.</p>
+      <div style="background-color: #FFFFFF; border: 1.5px solid #A7F3D0; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
+        <span style="font-size: 12px; color: #047857; font-weight: bold; text-transform: uppercase;">Montant Crédité</span>
+        <h1 style="font-size: 36px; color: #059669; margin: 5px 0; font-weight: 900;">+ ${amount} Ar</h1>
+        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Méthode : <strong>${method}</strong> | Réf: <strong>${refNum || 'N/A'}</strong></p>
+        <p style="margin: 5px 0; color: #1F2937; font-size: 15px; font-weight: bold;">Nouveau Solde : ${newBalance} Ar</p>
+      </div>
+      <p>Merci d'utiliser QueuePay !</p>
+    </div>
+  `;
+  return sendEmail({ to, subject: `Reçu de rechargement solde QueuePay (+${amount} Ar)`, html });
+}
+
+function sendApproachingEmail(to, ticketData) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #F59E0B; border-radius: 12px; background-color: #FFFBEB;">
+      <h2 style="color: #D97706; text-align: center;">⚠️ C'est bientôt votre tour !</h2>
+      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
+      <p>Il ne reste plus que <strong>${ticketData.people_ahead || 1} personne(s)</strong> devant vous pour le ticket <strong>N° ${ticketData.ticket_number}</strong> chez <strong>${ticketData.entity_name}</strong>.</p>
+      <p>Veuillez vous approcher de la salle d'attente pour être prêt dès l'appel au guichet.</p>
+    </div>
+  `;
+  return sendEmail({ to, subject: `⚠️ Attention : Votre tour approche ! (Ticket N°${ticketData.ticket_number})`, html });
+}
+
+function sendAbsentEmail(to, ticketData) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #EF4444; border-radius: 12px; background-color: #FEF2F2;">
+      <h2 style="color: #DC2626; text-align: center;">Ticket Marqué Absent</h2>
+      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
+      <p>Votre ticket <strong>N° ${ticketData.ticket_number}</strong> auprès de <strong>${ticketData.entity_name}</strong> a été appelé mais vous étiez absent(e).</p>
+      <p>Veuillez contacter le guichet d'accueil ou effectuer une nouvelle réservation si nécessaire.</p>
+    </div>
+  `;
+  return sendEmail({ to, subject: `Ticket N°${ticketData.ticket_number} marqué absent - ${ticketData.entity_name}`, html });
+}
+
+function sendCompanyResetPasswordEmail(to, companyName, newPassword) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
+      <h2 style="color: #F97316; text-align: center;">Nouveau mot de passe Administrateur 🔑</h2>
+      <p>Bonjour,</p>
+      <p>Le mot de passe de votre espace entreprise <strong>${companyName}</strong> a été réinitialisé par le Super Admin QueuePay.</p>
+      <div style="background-color: #FFF7ED; border: 1.5px solid #FFD8A8; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
+        <span style="font-size: 12px; color: #9A3412; font-weight: bold; text-transform: uppercase;">Nouveau Mot de Passe Temporaire</span>
+        <h2 style="font-size: 28px; color: #EA580C; margin: 10px 0; font-weight: 900; letter-spacing: 2px;">${newPassword}</h2>
+      </div>
+      <p>Veuillez vous connecter et modifier ce mot de passe dès que possible.</p>
+    </div>
+  `;
+  return sendEmail({ to, subject: `Réinitialisation de mot de passe ${companyName} - QueuePay`, html, code: newPassword });
 }
 
 module.exports = {
@@ -274,9 +421,16 @@ module.exports = {
   sendWelcomeEntityEmail,
   sendEntityOnboardingInviteEmail,
   sendRegistrationOTPEmail,
+  sendPasswordResetOTPEmail,
+  sendForgotPasswordEmail,
+  sendForgotPasswordAdminAlertEmail,
   sendTicketConfirmationEmail,
+  sendTicketReceiptEmail,
   sendTicketCalledEmail,
   sendTicketCompletedEmail,
-  sendPasswordResetOTPEmail,
+  sendDepositReceiptEmail,
+  sendApproachingEmail,
+  sendAbsentEmail,
+  sendCompanyResetPasswordEmail,
   sendEmail
 };
