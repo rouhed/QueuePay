@@ -329,65 +329,93 @@ function sendRegistrationOTPEmail(to, name, otp) {
   return sendEmail({ to, subject: `Code de vérification QueuePay: ${otp}`, html });
 }
 
-function sendTicketConfirmationEmail(to, ticketData) {
+function parseTicketParam(ticketData, clientName, ticketNumber, entityName, serviceName, extraField, timeSlot, price) {
+  if (ticketData && typeof ticketData === 'object') {
+    return {
+      client_name: ticketData.client_name || 'Client',
+      ticket_number: ticketData.ticket_number || 'N/A',
+      entity_name: ticketData.entity_name || 'QueuePay',
+      service_name: ticketData.service_name || 'Service',
+      desk_name: ticketData.desk_name || 'Guichet',
+      people_ahead: ticketData.people_ahead || 1,
+      time_slot: ticketData.time_slot || 'En cours',
+      price: ticketData.price || '0'
+    };
+  }
+  return {
+    client_name: clientName || ticketData || 'Client',
+    ticket_number: ticketNumber || 'N/A',
+    entity_name: entityName || 'QueuePay',
+    service_name: serviceName || 'Service',
+    desk_name: typeof extraField === 'string' ? extraField : 'Guichet',
+    people_ahead: typeof extraField === 'number' ? extraField : 1,
+    time_slot: timeSlot || 'En cours',
+    price: price || '0'
+  };
+}
+
+function sendTicketConfirmationEmail(to, ticketData, clientName, ticketNumber, entityName, serviceName, timeSlot, price) {
+  const data = parseTicketParam(ticketData, clientName, ticketNumber, entityName, serviceName, null, timeSlot, price);
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 12px; background-color: #FFFDFB;">
       <h2 style="color: #F97316; text-align: center;">Confirmation de votre Ticket QueuePay 🎟️</h2>
-      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
-      <p>Votre réservation de ticket auprès de <strong>${ticketData.entity_name}</strong> a été enregistrée avec succès.</p>
+      <p>Bonjour <strong>${data.client_name}</strong>,</p>
+      <p>Votre réservation de ticket auprès de <strong>${data.entity_name}</strong> a été enregistrée avec succès.</p>
       
       <div style="background-color: #FFF7ED; border: 1.5px solid #FFD8A8; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
         <span style="font-size: 12px; color: #9A3412; font-weight: bold; text-transform: uppercase;">Numéro de Ticket</span>
-        <h1 style="font-size: 42px; color: #EA580C; margin: 5px 0; font-weight: 900;">N° ${ticketData.ticket_number}</h1>
-        <p style="margin: 5px 0; font-weight: bold; color: #1F2937;">${ticketData.service_name}</p>
-        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Plage horaire estimée : <strong>${ticketData.time_slot}</strong></p>
-        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Tarif réservé : <strong>${ticketData.price} Ar</strong></p>
+        <h1 style="font-size: 42px; color: #EA580C; margin: 5px 0; font-weight: 900;">N° ${data.ticket_number}</h1>
+        <p style="margin: 5px 0; font-weight: bold; color: #1F2937;">${data.service_name}</p>
+        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Plage horaire estimée : <strong>${data.time_slot}</strong></p>
+        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Tarif réservé : <strong>${data.price} Ar</strong></p>
       </div>
 
       <p>Veuillez vous présenter à l'établissement quelques minutes avant votre plage horaire. Suivez l'avancement de votre file en direct sur votre application mobile QueuePay.</p>
       <p style="margin-top: 20px;">L'équipe QueuePay.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `Ticket N°${ticketData.ticket_number} confirmé - ${ticketData.entity_name}`, html });
+  return sendEmail({ to, subject: `Ticket N°${data.ticket_number} confirmé - ${data.entity_name}`, html });
 }
 
-function sendTicketCalledEmail(to, ticketData) {
+function sendTicketCalledEmail(to, ticketData, clientName, ticketNumber, entityName, serviceName, deskName) {
+  const data = parseTicketParam(ticketData, clientName, ticketNumber, entityName, serviceName, deskName);
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #10B981; border-radius: 12px; background-color: #ECFDF5;">
       <h2 style="color: #059669; text-align: center;">🟢 C'EST VOTRE TOUR AU GUICHET !</h2>
-      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
-      <p>Votre ticket <strong>N° ${ticketData.ticket_number}</strong> vient d'être appelé !</p>
+      <p>Bonjour <strong>${data.client_name}</strong>,</p>
+      <p>Votre ticket <strong>N° ${data.ticket_number}</strong> vient d'être appelé !</p>
       
       <div style="background-color: #FFFFFF; border: 2px solid #10B981; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
         <span style="font-size: 13px; color: #065F46; font-weight: bold;">VEUILLEZ VOUS PRÉSENTER IMMÉDIATEMENT AU :</span>
-        <h1 style="font-size: 38px; color: #047857; margin: 10px 0; font-weight: 900;">${ticketData.desk_name || 'Guichet'}</h1>
-        <p style="margin: 5px 0; font-weight: bold; color: #1F2937; font-size: 18px;">${ticketData.entity_name}</p>
-        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Service : ${ticketData.service_name}</p>
+        <h1 style="font-size: 38px; color: #047857; margin: 10px 0; font-weight: 900;">${data.desk_name}</h1>
+        <p style="margin: 5px 0; font-weight: bold; color: #1F2937; font-size: 18px;">${data.entity_name}</p>
+        <p style="margin: 5px 0; color: #4B5563; font-size: 14px;">Service : ${data.service_name}</p>
       </div>
 
       <p style="color: #065F46; font-weight: bold; text-align: center;">L'agent guichetier vous attend pour traiter votre demande.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `🟢 C'est votre tour ! Ticket N°${ticketData.ticket_number} - ${ticketData.entity_name}`, html });
+  return sendEmail({ to, subject: `🟢 C'est votre tour ! Ticket N°${data.ticket_number} - ${data.entity_name}`, html });
 }
 
-function sendTicketCompletedEmail(to, ticketData) {
+function sendTicketCompletedEmail(to, ticketData, clientName, ticketNumber, entityName, serviceName) {
+  const data = parseTicketParam(ticketData, clientName, ticketNumber, entityName, serviceName);
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #3B82F6; border-radius: 12px; background-color: #EFF6FF;">
       <h2 style="color: #2563EB; text-align: center;">🎉 Service Terminé - Merci de votre visite !</h2>
-      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
-      <p>Votre passage au guichet pour le ticket <strong>N° ${ticketData.ticket_number}</strong> auprès de <strong>${ticketData.entity_name}</strong> est maintenant terminé.</p>
+      <p>Bonjour <strong>${data.client_name}</strong>,</p>
+      <p>Votre passage au guichet pour le ticket <strong>N° ${data.ticket_number}</strong> auprès de <strong>${data.entity_name}</strong> est maintenant terminé.</p>
       
       <div style="background-color: #FFFFFF; border: 1.5px solid #BFDBFE; border-radius: 12px; padding: 16px; margin: 20px 0; text-align: center;">
-        <p style="margin: 5px 0; font-weight: bold; color: #1E40AF;">Service : ${ticketData.service_name}</p>
+        <p style="margin: 5px 0; font-weight: bold; color: #1E40AF;">Service : ${data.service_name}</p>
         <p style="margin: 5px 0; color: #3B82F6; font-size: 13px;">Statut : Terminé avec succès</p>
       </div>
 
       <p>Merci d'avoir utilisé QueuePay pour éviter l'attente physique. À très bientôt !</p>
-      <p style="margin-top: 20px;">L'équipe QueuePay & ${ticketData.entity_name}.</p>
+      <p style="margin-top: 20px;">L'équipe QueuePay & ${data.entity_name}.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `Attestation de passage - Ticket N°${ticketData.ticket_number}`, html });
+  return sendEmail({ to, subject: `Attestation de passage - Ticket N°${data.ticket_number}`, html });
 }
 
 function sendPasswordResetOTPEmail(to, name, otp) {
@@ -423,8 +451,8 @@ function sendForgotPasswordAdminAlertEmail(to, clientName, clientEmail) {
   return sendEmail({ to, subject: `Alerte Réinitialisation Mot de Passe - ${clientEmail}`, html });
 }
 
-function sendTicketReceiptEmail(to, ticketData) {
-  return sendTicketConfirmationEmail(to, ticketData);
+function sendTicketReceiptEmail(to, ticketData, clientName, ticketNumber, entityName, serviceName, bookingDate, timeSlot, price) {
+  return sendTicketConfirmationEmail(to, ticketData, clientName, ticketNumber, entityName, serviceName, timeSlot, price);
 }
 
 function sendDepositReceiptEmail(to, clientName, amount, method, refNum, newBalance) {
@@ -445,28 +473,30 @@ function sendDepositReceiptEmail(to, clientName, amount, method, refNum, newBala
   return sendEmail({ to, subject: `Reçu de rechargement solde QueuePay (+${amount} Ar)`, html });
 }
 
-function sendApproachingEmail(to, ticketData) {
+function sendApproachingEmail(to, ticketData, clientName, ticketNumber, entityName, serviceName, peopleAhead) {
+  const data = parseTicketParam(ticketData, clientName, ticketNumber, entityName, serviceName, peopleAhead);
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #F59E0B; border-radius: 12px; background-color: #FFFBEB;">
       <h2 style="color: #D97706; text-align: center;">⚠️ C'est bientôt votre tour !</h2>
-      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
-      <p>Il ne reste plus que <strong>${ticketData.people_ahead || 1} personne(s)</strong> devant vous pour le ticket <strong>N° ${ticketData.ticket_number}</strong> chez <strong>${ticketData.entity_name}</strong>.</p>
+      <p>Bonjour <strong>${data.client_name}</strong>,</p>
+      <p>Il ne reste plus que <strong>${data.people_ahead} personne(s)</strong> devant vous pour le ticket <strong>N° ${data.ticket_number}</strong> chez <strong>${data.entity_name}</strong>.</p>
       <p>Veuillez vous approcher de la salle d'attente pour être prêt dès l'appel au guichet.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `⚠️ Attention : Votre tour approche ! (Ticket N°${ticketData.ticket_number})`, html });
+  return sendEmail({ to, subject: `⚠️ Attention : Votre tour approche ! (Ticket N°${data.ticket_number})`, html });
 }
 
-function sendAbsentEmail(to, ticketData) {
+function sendAbsentEmail(to, ticketData, clientName, ticketNumber, entityName, serviceName) {
+  const data = parseTicketParam(ticketData, clientName, ticketNumber, entityName, serviceName);
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #EF4444; border-radius: 12px; background-color: #FEF2F2;">
       <h2 style="color: #DC2626; text-align: center;">Ticket Marqué Absent</h2>
-      <p>Bonjour <strong>${ticketData.client_name || 'Client'}</strong>,</p>
-      <p>Votre ticket <strong>N° ${ticketData.ticket_number}</strong> auprès de <strong>${ticketData.entity_name}</strong> a été appelé mais vous étiez absent(e).</p>
+      <p>Bonjour <strong>${data.client_name}</strong>,</p>
+      <p>Votre ticket <strong>N° ${data.ticket_number}</strong> auprès de <strong>${data.entity_name}</strong> a été appelé mais vous étiez absent(e).</p>
       <p>Veuillez contacter le guichet d'accueil ou effectuer une nouvelle réservation si nécessaire.</p>
     </div>
   `;
-  return sendEmail({ to, subject: `Ticket N°${ticketData.ticket_number} marqué absent - ${ticketData.entity_name}`, html });
+  return sendEmail({ to, subject: `Ticket N°${data.ticket_number} marqué absent - ${data.entity_name}`, html });
 }
 
 function sendCompanyResetPasswordEmail(to, companyName, newPassword) {
