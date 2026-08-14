@@ -56,7 +56,35 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
     if (code)      console.log(`│ Code OTP     : ${code}`);
     console.log(`└──────────────────────────────────────────────────────────┘\n`);
 
-    // --- TIER 1: HTTP API (Resend or Brevo) ---
+    // --- TIER 1: BREVO HTTP API (Preferred: Sends directly to ANY recipient email without test domain limits) ---
+    if (process.env.BREVO_API_KEY) {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': process.env.BREVO_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: 'QueuePay', email: fromAddress },
+            to: [{ email: recipient }],
+            subject,
+            htmlContent: finalHtml,
+            textContent: plainText
+          })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          console.log(`✅ Email envoyé avec succès à ${recipient} via Brevo HTTP API ! ID: ${data.messageId}`);
+          return true;
+        }
+        console.warn(`⚠️ Brevo HTTP API warning:`, data);
+      } catch (apiErr) {
+        console.warn(`⚠️ Erreur Brevo API:`, apiErr.message);
+      }
+    }
+
+    // --- TIER 2: RESEND HTTP API ---
     if (process.env.RESEND_API_KEY) {
       try {
         const response = await fetch('https://api.resend.com/emails', {
@@ -97,7 +125,8 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
                 to: [ownerEmail],
                 subject: `[TEST FORWARD -> ${recipient}] ${subject}`,
                 html: `<div style="background:#FFF3CD; color:#856404; padding:10px; margin-bottom:15px; border-radius:6px; font-family:sans-serif;">
-                         ⚠️ <strong>Mode Test Resend :</strong> Cet email était initialement destiné à <strong>${recipient}</strong>.
+                         ⚠️ <strong>Mode Test Resend :</strong> Cet email était initialement destiné à <strong>${recipient}</strong>.<br/>
+                         Pour envoyer directement à chaque client, ajoutez <code>BREVO_API_KEY</code> dans Render.
                        </div>${finalHtml}`,
                 text: `[Destinataire initial: ${recipient}]\n\n${plainText}`
               })
@@ -111,33 +140,6 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
         }
       } catch (apiErr) {
         console.warn(`⚠️ Erreur Resend API:`, apiErr.message);
-      }
-    }
-
-    if (process.env.BREVO_API_KEY) {
-      try {
-        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            'api-key': process.env.BREVO_API_KEY,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            sender: { name: 'QueuePay', email: fromAddress },
-            to: [{ email: recipient }],
-            subject,
-            htmlContent: finalHtml,
-            textContent: plainText
-          })
-        });
-        const data = await response.json();
-        if (response.ok) {
-          console.log(`✅ Email envoyé avec succès via Brevo HTTP API ! ID: ${data.messageId}`);
-          return true;
-        }
-        console.warn(`⚠️ Brevo HTTP API warning:`, data);
-      } catch (apiErr) {
-        console.warn(`⚠️ Erreur Brevo API:`, apiErr.message);
       }
     }
 
@@ -329,28 +331,28 @@ function sendRegistrationOTPEmail(to, name, otp) {
   return sendEmail({ to, subject: `Code de vérification QueuePay: ${otp}`, html });
 }
 
-function parseTicketParam(ticketData, clientName, ticketNumber, entityName, serviceName, extraField, timeSlot, price) {
+function parseTicketParam(ticketData, arg2, arg3, arg4, arg5, arg6, arg7) {
   if (ticketData && typeof ticketData === 'object') {
     return {
-      client_name: ticketData.client_name || 'Client',
-      ticket_number: ticketData.ticket_number || 'N/A',
-      entity_name: ticketData.entity_name || 'QueuePay',
-      service_name: ticketData.service_name || 'Service',
-      desk_name: ticketData.desk_name || 'Guichet',
-      people_ahead: ticketData.people_ahead || 1,
+      client_name: ticketData.client_name || ticketData.name || 'Client',
+      ticket_number: ticketData.ticket_number || ticketData.number || 'N/A',
+      entity_name: ticketData.entity_name || ticketData.entity || 'QueuePay',
+      service_name: ticketData.service_name || ticketData.service || 'Service',
+      desk_name: ticketData.desk_name || ticketData.desk || 'Guichet',
+      people_ahead: ticketData.people_ahead || ticketData.ahead || 1,
       time_slot: ticketData.time_slot || 'En cours',
       price: ticketData.price || '0'
     };
   }
   return {
-    client_name: clientName || ticketData || 'Client',
-    ticket_number: ticketNumber || 'N/A',
-    entity_name: entityName || 'QueuePay',
-    service_name: serviceName || 'Service',
-    desk_name: typeof extraField === 'string' ? extraField : 'Guichet',
-    people_ahead: typeof extraField === 'number' ? extraField : 1,
-    time_slot: timeSlot || 'En cours',
-    price: price || '0'
+    client_name: ticketData || 'Client',
+    ticket_number: arg2 || 'N/A',
+    entity_name: arg3 || 'QueuePay',
+    service_name: arg4 || 'Service',
+    desk_name: typeof arg5 === 'string' ? arg5 : 'Guichet',
+    people_ahead: typeof arg5 === 'number' ? arg5 : 1,
+    time_slot: arg6 || 'En cours',
+    price: arg7 || '0'
   };
 }
 
