@@ -79,6 +79,36 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
           return true;
         }
         console.warn(`⚠️ Resend HTTP API warning:`, data);
+
+        // Handle Resend Free Tier restriction (403: can only send to account owner email)
+        if (data.statusCode === 403 && data.message && data.message.includes('only send testing emails')) {
+          const ownerEmail = process.env.SUPER_ADMIN_EMAIL || process.env.SMTP_USER || 'rouhedmouhamed@gmail.com';
+          console.warn(`💡 Resend est en compte de test sans domaine vérifié. Redirection automatique de secours vers l'admin (${ownerEmail})...`);
+          
+          if (recipient !== ownerEmail) {
+            const fallbackRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                from: process.env.RESEND_FROM || 'QueuePay <onboarding@resend.dev>',
+                to: [ownerEmail],
+                subject: `[TEST FORWARD -> ${recipient}] ${subject}`,
+                html: `<div style="background:#FFF3CD; color:#856404; padding:10px; margin-bottom:15px; border-radius:6px; font-family:sans-serif;">
+                         ⚠️ <strong>Mode Test Resend :</strong> Cet email était initialement destiné à <strong>${recipient}</strong>.
+                       </div>${finalHtml}`,
+                text: `[Destinataire initial: ${recipient}]\n\n${plainText}`
+              })
+            });
+            const fallbackData = await fallbackRes.json();
+            if (fallbackRes.ok) {
+              console.log(`✅ Email de test réorienté avec succès vers ${ownerEmail} via Resend (ID: ${fallbackData.id})`);
+              return true;
+            }
+          }
+        }
       } catch (apiErr) {
         console.warn(`⚠️ Erreur Resend API:`, apiErr.message);
       }
