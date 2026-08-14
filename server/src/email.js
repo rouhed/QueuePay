@@ -56,7 +56,7 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
     if (code)      console.log(`│ Code OTP     : ${code}`);
     console.log(`└──────────────────────────────────────────────────────────┘\n`);
 
-    // --- TIER 1: BREVO HTTP API (Preferred: Sends directly to ANY recipient email without test domain limits) ---
+    // --- TIER 1: BREVO HTTP API ---
     if (process.env.BREVO_API_KEY) {
       try {
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -78,13 +78,40 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
           console.log(`✅ Email envoyé avec succès à ${recipient} via Brevo HTTP API ! ID: ${data.messageId}`);
           return true;
         }
-        console.warn(`⚠️ Brevo HTTP API warning:`, data);
+        console.warn(`⚠️ Brevo HTTP API warning:`, data.message || data);
       } catch (apiErr) {
         console.warn(`⚠️ Erreur Brevo API:`, apiErr.message);
       }
     }
 
-    // --- TIER 2: RESEND HTTP API ---
+    // --- TIER 2: SENDGRID HTTP API ---
+    if (process.env.SENDGRID_API_KEY) {
+      try {
+        const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email: recipient }] }],
+            from: { email: fromAddress, name: 'QueuePay' },
+            subject,
+            content: [{ type: 'text/html', value: finalHtml }]
+          })
+        });
+        if (response.ok || response.status === 202) {
+          console.log(`✅ Email envoyé avec succès à ${recipient} via SendGrid HTTP API !`);
+          return true;
+        }
+        const data = await response.json().catch(() => ({}));
+        console.warn(`⚠️ SendGrid HTTP API warning:`, data);
+      } catch (apiErr) {
+        console.warn(`⚠️ Erreur SendGrid API:`, apiErr.message);
+      }
+    }
+
+    // --- TIER 3: RESEND HTTP API ---
     if (process.env.RESEND_API_KEY) {
       try {
         const response = await fetch('https://api.resend.com/emails', {
@@ -126,7 +153,7 @@ async function sendEmail({ to, subject, html, text, actionUrl = null, code = nul
                 subject: `[TEST FORWARD -> ${recipient}] ${subject}`,
                 html: `<div style="background:#FFF3CD; color:#856404; padding:10px; margin-bottom:15px; border-radius:6px; font-family:sans-serif;">
                          ⚠️ <strong>Mode Test Resend :</strong> Cet email était initialement destiné à <strong>${recipient}</strong>.<br/>
-                         Pour envoyer directement à chaque client, ajoutez <code>BREVO_API_KEY</code> dans Render.
+                         Pour envoyer directement à chaque client, validez votre profil Brevo sur app.brevo.com.
                        </div>${finalHtml}`,
                 text: `[Destinataire initial: ${recipient}]\n\n${plainText}`
               })
