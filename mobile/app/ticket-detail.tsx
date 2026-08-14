@@ -134,9 +134,15 @@ export default function TicketDetailScreen() {
       socket.on('ticketCall', handleLiveUpdate);
       socket.on('ticketApproaching', handleLiveUpdate);
       
-      const handleCompleted = () => {
-        console.log('WS: Ticket completed event received!');
-        setShowCelebration(true);
+      const handleCompleted = (compData: any) => {
+        console.log('WS: Ticket completed event received!', compData);
+        if (
+          compData &&
+          ((ticket && compData.ticket_number === ticket.ticket_number) ||
+           (ticket && Number(compData.clientId) === Number(ticket.client_id)))
+        ) {
+          setShowCelebration(true);
+        }
         fetchTicketDetails();
       };
       socket.on('ticketCompleted', handleCompleted);

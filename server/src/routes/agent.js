@@ -222,7 +222,8 @@ router.post('/call-next', async (req, res) => {
       ticket_number: updatedTicket.ticket_number,
       service_name: ticket.service_name,
       desk_name: desk.name,
-      entityId: entityId
+      entityId: entityId,
+      clientId: ticket.client_id
     });
 
     // Send real-time Email notification for Called ticket
@@ -306,7 +307,8 @@ router.post('/complete/:ticketId', async (req, res) => {
       ticket_number: completedTicket.ticket_number,
       entity_name: completedTicket.entity_name,
       service_name: completedTicket.service_name,
-      entityId: completedTicket.entity_id
+      entityId: completedTicket.entity_id,
+      clientId: completedTicket.client_id
     });
 
     emailService.sendTicketCompletedEmail(
@@ -351,7 +353,9 @@ router.post('/complete/:ticketId', async (req, res) => {
       notifyTicketCall(ticketInfo.client_id, {
         ticket_number: nextTicket.ticket_number,
         service_name: ticketInfo.service_name,
-        desk_name: desk.name
+        desk_name: desk.name,
+        entityId: entityId,
+        clientId: ticketInfo.client_id
       });
 
       // Send real-time Email notification for Called ticket

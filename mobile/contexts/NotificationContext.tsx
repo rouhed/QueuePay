@@ -116,39 +116,45 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       newSocket.on('ticketCall', (callData: any) => {
         console.log('WS Alert: ticketCall received', callData);
-        triggerNotification(
-          "C'est votre tour ! 🎫",
-          `Ticket N°${callData.ticket_number} appelé au ${callData.desk_name} pour ${callData.service_name}.`,
-          'success'
-        );
-        Alert.alert(
-          "C'est votre tour !",
-          `Veuillez vous présenter immédiatement au ${callData.desk_name} pour le service ${callData.service_name}.`
-        );
+        if (currentUserId && callData?.clientId && Number(callData.clientId) === Number(currentUserId)) {
+          triggerNotification(
+            "C'est votre tour ! 🎫",
+            `Ticket N°${callData.ticket_number} appelé au ${callData.desk_name} pour ${callData.service_name}.`,
+            'success'
+          );
+          Alert.alert(
+            "C'est votre tour !",
+            `Veuillez vous présenter immédiatement au ${callData.desk_name} pour le service ${callData.service_name}.`
+          );
+        }
       });
 
       newSocket.on('ticketApproaching', (approachData: any) => {
         console.log('WS Alert: ticketApproaching received', approachData);
-        triggerNotification(
-          "Votre tour approche ! ⚠️",
-          `Ticket N°${approachData.ticket_number} : il reste 3 clients avant vous !`,
-          'warning'
-        );
+        if (currentUserId && approachData?.clientId && Number(approachData.clientId) === Number(currentUserId)) {
+          triggerNotification(
+            "Votre tour approche ! ⚠️",
+            `Ticket N°${approachData.ticket_number} : il reste 3 clients avant vous !`,
+            'warning'
+          );
+        }
       });
 
       newSocket.on('ticketCompleted', (compData: any) => {
         console.log('WS Alert: ticketCompleted received', compData);
-        triggerNotification(
-          "Service Terminé ! 🎉",
-          `Passage au guichet terminé pour le Ticket N°${compData?.ticket_number || ''}. Merci !`,
-          'success'
-        );
-        setCelebration({
-          visible: true,
-          ticketNumber: compData?.ticket_number,
-          entityName: compData?.entity_name,
-          serviceName: compData?.service_name,
-        });
+        if (currentUserId && compData?.clientId && Number(compData.clientId) === Number(currentUserId)) {
+          triggerNotification(
+            "Service Terminé ! 🎉",
+            `Passage au guichet terminé pour le Ticket N°${compData?.ticket_number || ''}. Merci !`,
+            'success'
+          );
+          setCelebration({
+            visible: true,
+            ticketNumber: compData?.ticket_number,
+            entityName: compData?.entity_name,
+            serviceName: compData?.service_name,
+          });
+        }
       });
 
       newSocket.on('disconnect', () => {

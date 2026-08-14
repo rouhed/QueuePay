@@ -52,12 +52,13 @@ function notifyQueueUpdate(entityId) {
 // Helper to notify a specific client and public TV screens that a ticket is being called
 function notifyTicketCall(clientId, ticketData) {
   if (io) {
+    const payload = { ...(ticketData || {}), clientId };
     if (clientId) {
-      io.to(`client:${String(clientId)}`).emit('ticketCall', ticketData);
+      io.to(`client:${String(clientId)}`).emit('ticketCall', payload);
     }
     if (ticketData && ticketData.entityId) {
       const eId = String(ticketData.entityId);
-      io.to(`entity:${eId}`).emit('ticketCall', ticketData);
+      io.to(`entity:${eId}`).emit('ticketCall', payload);
       console.log(`Sent ticketCall to client ${clientId} and entity ${eId} for ticket ${ticketData?.ticket_number}`);
     }
   }
@@ -66,8 +67,11 @@ function notifyTicketCall(clientId, ticketData) {
 // Helper to notify a specific client that their turn is approaching (e.g. 3 clients ahead)
 function notifyTicketApproaching(clientId, ticketData) {
   if (io) {
-    io.to(`client:${clientId}`).emit('ticketApproaching', ticketData);
-    console.log(`Sent ticketApproaching to client ${clientId} for ticket ${ticketData.ticket_number}. Clients ahead: ${ticketData.clientsAhead}`);
+    const payload = { ...(ticketData || {}), clientId };
+    if (clientId) {
+      io.to(`client:${String(clientId)}`).emit('ticketApproaching', payload);
+      console.log(`Sent ticketApproaching to client ${clientId} for ticket ${ticketData.ticket_number}`);
+    }
   }
 }
 
@@ -89,9 +93,7 @@ function notifyTicketCompleted(clientId, ticketData) {
     if (ticketData && ticketData.entityId) {
       io.to(`entity:${String(ticketData.entityId)}`).emit('ticketCompleted', payload);
     }
-    // Also broadcast globally so mobile app gets it reliably
-    io.emit('ticketCompleted', payload);
-    console.log(`Sent ticketCompleted to client ${clientId}`);
+    console.log(`Sent ticketCompleted specifically to client ${clientId} and entity ${ticketData?.entityId}`);
   }
 }
 
